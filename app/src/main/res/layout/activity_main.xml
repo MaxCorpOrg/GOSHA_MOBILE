@@ -1,0 +1,729 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootScrollView"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_playful_screen"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:id="@+id/rootContent"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="18dp">
+
+        <TextView
+            android:id="@+id/tvAppTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            style="@style/TextAppearance.MaxCorp.ScreenTitle" />
+
+        <TextView
+            android:id="@+id/tvAppSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/app_subtitle"
+            style="@style/TextAppearance.MaxCorp.Subtitle" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardLoadingStep"
+            style="@style/Widget.MaxCorp.Card"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="4dp"
+            android:layout_weight="1"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:cardCornerRadius="28dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@android:color/transparent"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_loading_panel"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <TextView
+                    android:id="@+id/tvLoadingBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_section_badge"
+                    android:paddingLeft="16dp"
+                    android:paddingTop="8dp"
+                    android:paddingRight="16dp"
+                    android:paddingBottom="8dp"
+                    android:text="@string/loading_badge"
+                    android:textAllCaps="true"
+                    android:textColor="@color/mc_primary_dark"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <FrameLayout
+                    android:layout_width="268dp"
+                    android:layout_height="258dp"
+                    android:layout_marginTop="10dp">
+
+                    <View
+                        android:id="@+id/loadingGlow"
+                        android:layout_width="224dp"
+                        android:layout_height="224dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_robot_glow" />
+
+                    <ImageView
+                        android:id="@+id/loadingSparkleLeft"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:layout_gravity="start|top"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginTop="24dp"
+                        app:srcCompat="@drawable/ic_sparkle_star" />
+
+                    <ImageView
+                        android:id="@+id/loadingSparkleRight"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:layout_gravity="end|top"
+                        android:layout_marginTop="52dp"
+                        android:layout_marginEnd="30dp"
+                        app:srcCompat="@drawable/ic_sparkle_star" />
+
+                    <View
+                        android:id="@+id/loadingShadow"
+                        android:layout_width="126dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:layout_marginBottom="18dp"
+                        android:background="@drawable/bg_robot_shadow" />
+
+                    <ImageView
+                        android:id="@+id/loadingRobot"
+                        android:layout_width="238dp"
+                        android:layout_height="222dp"
+                        android:layout_gravity="center_horizontal|top"
+                        android:translationY="-6dp"
+                        android:contentDescription="@string/section_badge_loading"
+                        app:srcCompat="@drawable/ic_robot_splash_scene" />
+                </FrameLayout>
+
+                <ProgressBar
+                    android:id="@+id/progressRobotSearch"
+                    style="?android:attr/progressBarStyleLarge"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="-8dp"
+                    android:indeterminate="true"
+                    android:indeterminateTint="@color/mc_white" />
+
+                <TextView
+                    android:id="@+id/tvLoadingTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:gravity="center"
+                    android:text="@string/loading_title_search"
+                    style="@style/TextAppearance.MaxCorp.SplashTitle" />
+
+                <TextView
+                    android:id="@+id/tvLoadingBody"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center"
+                    android:text="@string/loading_body_search"
+                    style="@style/TextAppearance.MaxCorp.SplashBody" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardWelcomeStep"
+            style="@style/Widget.MaxCorp.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/welcome_step_title"
+                    style="@style/TextAppearance.MaxCorp.StepTitle" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/welcome_body_main"
+                    style="@style/TextAppearance.MaxCorp.Body" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/welcome_body_note"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:background="@drawable/bg_playful_field"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/legal_start_caption"
+                        style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+                    <Button
+                        android:id="@+id/btnWelcomePrivacyPolicy"
+                        style="@style/Widget.MaxCorp.Button.Secondary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="@string/legal_privacy_button" />
+
+                    <Button
+                        android:id="@+id/btnWelcomeTermsOfUse"
+                        style="@style/Widget.MaxCorp.Button.Secondary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/legal_terms_button" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btnWelcomeNext"
+                    style="@style/Widget.MaxCorp.Button.Primary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/button_next" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardRegistrationStep"
+            style="@style/Widget.MaxCorp.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/registration_step_title"
+                    style="@style/TextAppearance.MaxCorp.StepTitle" />
+
+                <TextView
+                    android:id="@+id/tvRegistrationIntro"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/registration_intro_client"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaxCorp.TextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:hint="@string/registration_hint_code">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etCode"
+                        style="@style/Widget.MaxCorp.TextInputEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textNoSuggestions" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaxCorp.TextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:hint="@string/registration_hint_name">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etOwnerName"
+                        style="@style/Widget.MaxCorp.TextInputEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPersonName" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaxCorp.TextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:hint="@string/registration_hint_email">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etOwnerEmail"
+                        style="@style/Widget.MaxCorp.TextInputEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textEmailAddress" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaxCorp.TextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:hint="@string/registration_hint_phone">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etOwnerPhone"
+                        style="@style/Widget.MaxCorp.TextInputEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="phone" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <CheckBox
+                    android:id="@+id/cbPrivacyConsent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:buttonTint="@color/mc_primary"
+                    android:text="@string/registration_consent_checkbox"
+                    android:textColor="@color/mc_text"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:id="@+id/tvPrivacyConsentHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:autoLink="email"
+                    android:linksClickable="true"
+                    android:text="@string/registration_consent_hint"
+                    android:textColor="@color/mc_text_soft"
+                    android:textIsSelectable="true"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+                <LinearLayout
+                    android:id="@+id/registrationLegalLinks"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_playful_field"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/registration_legal_caption"
+                        style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+                    <Button
+                        android:id="@+id/btnRegistrationPrivacyPolicy"
+                        style="@style/Widget.MaxCorp.Button.Secondary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="@string/legal_privacy_button" />
+
+                    <Button
+                        android:id="@+id/btnRegistrationTermsOfUse"
+                        style="@style/Widget.MaxCorp.Button.Secondary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/legal_terms_button" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btnActivate"
+                    style="@style/Widget.MaxCorp.Button.Primary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/button_next" />
+
+                <Button
+                    android:id="@+id/btnRegistrationBack"
+                    style="@style/Widget.MaxCorp.Button.Secondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/button_back" />
+
+                <TextView
+                    android:id="@+id/tvCodeStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_playful_field"
+                    android:padding="14dp"
+                    android:text="@string/registration_status_fill"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardWifiStep"
+            style="@style/Widget.MaxCorp.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/wifi_step_title"
+                    style="@style/TextAppearance.MaxCorp.StepTitle" />
+
+                <TextView
+                    android:id="@+id/tvWifiName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_playful_field"
+                    android:padding="14dp"
+                    android:text="@string/wifi_not_connected"
+                    style="@style/TextAppearance.MaxCorp.Body" />
+
+                <TextView
+                    android:id="@+id/tvInstruction"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/wifi_instruction_main"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/wifi_instruction_help"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+                <Button
+                    android:id="@+id/btnProvisionRobotWifi"
+                    style="@style/Widget.MaxCorp.Button.Primary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/button_connect_robot" />
+
+                <Button
+                    android:id="@+id/btnWifiBack"
+                    style="@style/Widget.MaxCorp.Button.Secondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/button_back" />
+
+                <TextView
+                    android:id="@+id/tvRobotCheck"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_playful_field"
+                    android:padding="14dp"
+                    android:text="@string/wifi_check_default"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardSuccessStep"
+            style="@style/Widget.MaxCorp.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/success_step_title"
+                    style="@style/TextAppearance.MaxCorp.StepTitle" />
+
+                <TextView
+                    android:id="@+id/tvSuccessMessage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/success_message_default"
+                    style="@style/TextAppearance.MaxCorp.Body" />
+
+                <Button
+                    android:id="@+id/btnSuccessNext"
+                    style="@style/Widget.MaxCorp.Button.Primary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/button_next" />
+
+                <Button
+                    android:id="@+id/btnSuccessBack"
+                    style="@style/Widget.MaxCorp.Button.Secondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/button_back" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardMenuStep"
+            style="@style/Widget.MaxCorp.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="24dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <FrameLayout
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:background="@drawable/bg_menu_robot_badge"
+                        android:padding="10dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:contentDescription="@string/section_badge_loading"
+                            app:srcCompat="@drawable/ic_robot_mascot" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/menu_hero_title"
+                            style="@style/TextAppearance.MaxCorp.StepTitle" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="@string/menu_hero_body"
+                            style="@style/TextAppearance.MaxCorp.BodySoft" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="@string/menu_title"
+                    style="@style/TextAppearance.MaxCorp.StepTitle" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/menu_label_robot"
+                    style="@style/TextAppearance.MaxCorp.SectionLabel" />
+
+                <TextView
+                    android:id="@+id/tvMenuRobot"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_playful_field"
+                    android:padding="16dp"
+                    android:text="@string/menu_robot_empty"
+                    android:textAppearance="@style/TextAppearance.MaxCorp.FieldValue" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/menu_label_plan"
+                    style="@style/TextAppearance.MaxCorp.SectionLabel" />
+
+                <TextView
+                    android:id="@+id/tvMenuPlan"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_playful_field"
+                    android:padding="16dp"
+                    android:text="@string/menu_value_empty"
+                    style="@style/TextAppearance.MaxCorp.Body" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/menu_label_owner"
+                    style="@style/TextAppearance.MaxCorp.SectionLabel" />
+
+                <TextView
+                    android:id="@+id/tvMenuOwner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_playful_field"
+                    android:padding="16dp"
+                    android:text="@string/menu_value_empty"
+                    style="@style/TextAppearance.MaxCorp.Body" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMenuStatus"
+                    style="@style/Widget.MaxCorp.Button.Menu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="@string/menu_button_status"
+                    app:icon="@drawable/ic_menu_status"
+                    app:iconTint="@color/mc_white" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMenuCabinet"
+                    style="@style/Widget.MaxCorp.Button.Menu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/menu_button_cabinet"
+                    app:icon="@drawable/ic_menu_cabinet"
+                    app:iconTint="@color/mc_white" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMenuGuides"
+                    style="@style/Widget.MaxCorp.Button.Menu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/menu_button_guides"
+                    app:icon="@drawable/ic_menu_guides"
+                    app:iconTint="@color/mc_white" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMenuSupport"
+                    style="@style/Widget.MaxCorp.Button.Menu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/menu_button_support"
+                    app:icon="@drawable/ic_menu_support"
+                    app:iconTint="@color/mc_white" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMenuReconnect"
+                    style="@style/Widget.MaxCorp.Button.Menu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/menu_button_reconnect"
+                    app:icon="@drawable/ic_menu_wifi"
+                    app:iconTint="@color/mc_white" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMenuReset"
+                    style="@style/Widget.MaxCorp.Button.MenuSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/menu_button_reset"
+                    app:icon="@drawable/ic_menu_reset"
+                    app:iconTint="@color/mc_primary"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tvStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:background="@drawable/bg_playful_field"
+                    android:padding="14dp"
+                    android:text="@string/status_connected_default"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardDiagnostics"
+            style="@style/Widget.MaxCorp.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="24dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/diagnostics_title"
+                    style="@style/TextAppearance.MaxCorp.StepTitle" />
+
+                <TextView
+                    android:id="@+id/tvDiagnosticsBody"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_playful_field"
+                    android:padding="14dp"
+                    android:text="@string/diagnostics_waiting"
+                    android:textIsSelectable="true"
+                    android:typeface="monospace"
+                    style="@style/TextAppearance.MaxCorp.BodySoft" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,27 @@
+<resources>
+    <color name="mc_navy">#0E1728</color>
+    <color name="mc_bg_top">#D8F1FF</color>
+    <color name="mc_bg_bottom">#FFF6DA</color>
+    <color name="mc_card">#FFFDFD</color>
+    <color name="mc_card_soft">#EEF6FF</color>
+    <color name="mc_card_soft_strong">#E6F4FF</color>
+    <color name="mc_text">#16355B</color>
+    <color name="mc_text_soft">#58708E</color>
+    <color name="mc_primary">#1C4D8F</color>
+    <color name="mc_primary_dark">#143666</color>
+    <color name="mc_primary_light">#4F8EE8</color>
+    <color name="mc_line">#CFE4FF</color>
+    <color name="mc_line_strong">#B7D6FF</color>
+    <color name="mc_sun">#FFD55C</color>
+    <color name="mc_mint">#7FE3D1</color>
+    <color name="mc_cyan">#7FDBFF</color>
+    <color name="mc_star">#FFF7C6</color>
+    <color name="mc_white">#FFFFFFFF</color>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

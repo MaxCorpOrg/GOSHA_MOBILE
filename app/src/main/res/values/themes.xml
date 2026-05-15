@@ -1,0 +1,16 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.MaxCorpEdgeConnector" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/mc_primary</item>
+        <item name="colorPrimaryVariant">@color/mc_primary_dark</item>
+        <item name="colorOnPrimary">@color/mc_white</item>
+        <item name="colorSecondary">@color/mc_sun</item>
+        <item name="colorOnSecondary">@color/mc_primary_dark</item>
+        <item name="android:windowBackground">@drawable/bg_playful_screen</item>
+        <item name="materialButtonStyle">@style/Widget.MaxCorp.Button.Primary</item>
+        <item name="android:buttonStyle">@style/Widget.MaxCorp.Button.Primary</item>
+        <item name="textInputStyle">@style/Widget.MaxCorp.TextInputLayout</item>
+        <item name="editTextStyle">@style/Widget.MaxCorp.TextInputEditText</item>
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
+        <item name="android:navigationBarColor">@color/mc_bg_bottom</item>
+    </style>
+</resources>

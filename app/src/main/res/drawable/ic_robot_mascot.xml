@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="512dp"
+    android:height="512dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M123,432H389C401,432 401,441 389,441H123C111,441 111,432 123,432Z" />
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M165,212H347A42,42 0,0 1,389 254V336A42,42 0,0 1,347 378H165A42,42 0,0 1,123 336V254A42,42 0,0 1,165 212Z" />
+
+    <path
+        android:fillColor="@color/mc_white"
+        android:pathData="M157,198H339A44,44 0,0 1,383 242V328A44,44 0,0 1,339 372H157A44,44 0,0 1,113 328V242A44,44 0,0 1,157 198Z" />
+
+    <path
+        android:fillColor="@color/mc_white"
+        android:pathData="M89,247H123A16,16 0,0 1,139 263V305A16,16 0,0 1,123 321H89A16,16 0,0 1,73 305V263A16,16 0,0 1,89 247Z" />
+
+    <path
+        android:fillColor="@color/mc_white"
+        android:pathData="M389,247H423A16,16 0,0 1,439 263V305A16,16 0,0 1,423 321H389A16,16 0,0 1,373 305V263A16,16 0,0 1,389 247Z" />
+
+    <path
+        android:fillColor="@color/mc_navy"
+        android:pathData="M174,230H322A18,18 0,0 1,340 248V322A18,18 0,0 1,322 340H174A18,18 0,0 1,156 322V248A18,18 0,0 1,174 230Z" />
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M216,284m-27,0a27,27 0,1 0,54 0a27,27 0,1 0,-54 0" />
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M297,284m-27,0a27,27 0,1 0,54 0a27,27 0,1 0,-54 0" />
+
+    <path
+        android:fillColor="@color/mc_white"
+        android:pathData="M172,374H227V417A12,12 0,0 1,215 429H184A12,12 0,0 1,172 417Z" />
+
+    <path
+        android:fillColor="@color/mc_white"
+        android:pathData="M285,374H340V417A12,12 0,0 1,328 429H297A12,12 0,0 1,285 417Z" />
+
+    <group
+        android:pivotX="210"
+        android:pivotY="198"
+        android:rotation="43">
+        <path
+            android:fillColor="@color/mc_white"
+            android:pathData="M158,188H254V208H158Z" />
+    </group>
+
+    <group
+        android:pivotX="302"
+        android:pivotY="198"
+        android:rotation="-43">
+        <path
+            android:fillColor="@color/mc_white"
+            android:pathData="M258,188H354V208H258Z" />
+    </group>
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M68,176l12,-25l12,25l-12,25z" />
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M38,215l8,-16l8,16l-8,16z" />
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M374,210l10,-20l10,20l-10,20z" />
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M418,372l14,-28l14,28l-14,28z" />
+
+    <path
+        android:fillColor="@color/mc_cyan"
+        android:pathData="M392,395l9,-19l9,19l-9,19z" />
+</vector>

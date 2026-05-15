@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_playful_screen"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/support_title"
+            style="@style/TextAppearance.MaxCorp.ScreenTitle" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/support_subtitle"
+            style="@style/TextAppearance.MaxCorp.Subtitle" />
+
+        <FrameLayout
+            android:layout_width="74dp"
+            android:layout_height="74dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/bg_section_badge"
+            android:padding="12dp">
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/section_badge_support"
+                app:srcCompat="@drawable/ic_menu_support"
+                app:tint="@color/mc_primary" />
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/bg_playful_card"
+            android:padding="18dp"
+            android:text="@string/support_card_1"
+            style="@style/TextAppearance.MaxCorp.Body" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_playful_card"
+            android:padding="18dp"
+            android:text="@string/support_card_2"
+            style="@style/TextAppearance.MaxCorp.Body" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_playful_card"
+            android:padding="18dp"
+            android:text="@string/support_card_3"
+            style="@style/TextAppearance.MaxCorp.Body" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_playful_field"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/support_contact_title"
+                style="@style/TextAppearance.MaxCorp.SectionLabel" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/support_contact_caption"
+                style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+            <TextView
+                android:id="@+id/tvSupportEmail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:autoLink="email"
+                android:linksClickable="true"
+                android:text="@string/support_contact_email"
+                android:textColor="@color/mc_primary_dark"
+                android:textIsSelectable="true"
+                style="@style/TextAppearance.MaxCorp.FieldValue" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_playful_field"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/support_policy_title"
+                style="@style/TextAppearance.MaxCorp.SectionLabel" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/support_policy_caption"
+                style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+            <TextView
+                android:id="@+id/tvSupportPolicyLink"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:textColor="@color/mc_primary_dark"
+                style="@style/TextAppearance.MaxCorp.FieldValue" />
+
+            <Button
+                android:id="@+id/btnOpenPrivacyPolicy"
+                style="@style/Widget.MaxCorp.Button.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/support_policy_button" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="@string/support_terms_title"
+                style="@style/TextAppearance.MaxCorp.SectionLabel" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/support_terms_caption"
+                style="@style/TextAppearance.MaxCorp.BodySoft" />
+
+            <TextView
+                android:id="@+id/tvSupportTermsLink"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:textColor="@color/mc_primary_dark"
+                style="@style/TextAppearance.MaxCorp.FieldValue" />
+
+            <Button
+                android:id="@+id/btnOpenTermsOfUse"
+                style="@style/Widget.MaxCorp.Button.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/support_terms_button" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnBackToMenu"
+            style="@style/Widget.MaxCorp.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="24dp"
+            android:text="@string/button_back_to_menu" />
+
+    </LinearLayout>
+</ScrollView>
