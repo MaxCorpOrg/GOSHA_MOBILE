@@ -5,11 +5,12 @@
 ## Сначала прочитать
 
 1. `AGENTS.md`
-2. `README_RU.md`
-3. `docs/NEW_CHAT_CHECKPOINT_RU.md`
-4. `docs/AGENT_CHECKPOINT_RU.md`
-5. `docs/PROJECT_STATUS_RU.md`
-6. Если работаешь с Android-кодом:
+2. `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+3. `README_RU.md`
+4. `docs/NEW_CHAT_CHECKPOINT_RU.md`
+5. `docs/AGENT_CHECKPOINT_RU.md`
+6. `docs/PROJECT_STATUS_RU.md`
+7. Если работаешь с Android-кодом:
    - `app/AGENTS.md`
 
 ## Что это за проект
@@ -28,3 +29,5 @@
   - `GOSHA-`
   - `Xiaozhi-`
 - В текстах и интерфейсе пользователю показывать только `GOSHA-`
+- Если нужно быстро свериться, где серверный голос, панель и прошивка, смотри:
+  - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`

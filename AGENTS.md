@@ -7,6 +7,7 @@
 1. Прочитай:
    - `README_RU.md`
    - `START_HERE_FOR_NEW_CHAT.md`
+   - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
    - `docs/NEW_CHAT_CHECKPOINT_RU.md`
    - `docs/AGENT_CHECKPOINT_RU.md`
    - `docs/PROJECT_STATUS_RU.md`
@@ -22,6 +23,8 @@
 - Это самостоятельный проект, созданный одноразовым копированием из старого Android-клиента `AI_ROBOT`.
 - После копирования это уже независимый контур.
 - Старое опубликованное приложение из `AI_ROBOT` считается легаси-контуром и не является основным объектом этой папки.
+- Если нужно быстро понять, где сервер, голоса, прошивка и мобильный контракт, сначала смотри:
+  - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
 
 ## Главные правила
 
