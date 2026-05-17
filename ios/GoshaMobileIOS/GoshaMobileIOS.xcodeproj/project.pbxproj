@@ -1,0 +1,407 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 51;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		29E129B2FB00D9337CEFB593 /* OnboardingDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3BBD0BF98BA4685CDE535E /* OnboardingDraftStore.swift */; };
+		3602C5C5124C436B26304AAC /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4ED0C1C9767635352E98C2F4 /* NetworkExtension.framework */; };
+		38984DAA5368D15063124BC9 /* GoshaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D91B22FC212BB4C8D3CE3E0 /* GoshaMobileApp.swift */; };
+		5BA31473B3DFB2912EB1447E /* OnboardingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 320E55866EEC6469047F1214 /* OnboardingModels.swift */; };
+		ABD2171BFD097179D16C2506 /* PanelAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18D99F46AE332A488232ED14 /* PanelAPIClient.swift */; };
+		B5C5304E8CB70848328175CF /* RobotWiFiJoiner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930DC766B628B73E3AF3BDC6 /* RobotWiFiJoiner.swift */; };
+		BB2D6A307DF152B4A4A8D6FC /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E4AC65B75EC72C85B2658ED /* AppConfig.swift */; };
+		BDB744EFE0D7D387D3189456 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66B1453A12BF8FB8070F9365 /* ContentView.swift */; };
+		D6E56347BE21F88E6949FA71 /* WebDocumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEBECF8B1B98A106962031D /* WebDocumentView.swift */; };
+		D8C04F70206BE4A151AE0B38 /* OnboardingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85C258AB91366BA21CB3B1F /* OnboardingViewModel.swift */; };
+		E768C34A83982BDD3E0ED020 /* ProductShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16F44178F03C32E2EDBB339C /* ProductShellView.swift */; };
+		FBBD77DABA3B8BE09F7EC709 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 296CF3EB1F548A7E12D0BBBD /* WebKit.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		16F44178F03C32E2EDBB339C /* ProductShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductShellView.swift; sourceTree = "<group>"; };
+		18D99F46AE332A488232ED14 /* PanelAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelAPIClient.swift; sourceTree = "<group>"; };
+		296CF3EB1F548A7E12D0BBBD /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		320E55866EEC6469047F1214 /* OnboardingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingModels.swift; sourceTree = "<group>"; };
+		4ED0C1C9767635352E98C2F4 /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = System/Library/Frameworks/NetworkExtension.framework; sourceTree = SDKROOT; };
+		66B1453A12BF8FB8070F9365 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		6E0FEDB486045370CC61E8B7 /* GoshaMobileIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GoshaMobileIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D91B22FC212BB4C8D3CE3E0 /* GoshaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoshaMobileApp.swift; sourceTree = "<group>"; };
+		8E4AC65B75EC72C85B2658ED /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		930DC766B628B73E3AF3BDC6 /* RobotWiFiJoiner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RobotWiFiJoiner.swift; sourceTree = "<group>"; };
+		C85C258AB91366BA21CB3B1F /* OnboardingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViewModel.swift; sourceTree = "<group>"; };
+		ED3BBD0BF98BA4685CDE535E /* OnboardingDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingDraftStore.swift; sourceTree = "<group>"; };
+		FBEBECF8B1B98A106962031D /* WebDocumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDocumentView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A83335FD500C8CD22718F0AF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3602C5C5124C436B26304AAC /* NetworkExtension.framework in Frameworks */,
+				FBBD77DABA3B8BE09F7EC709 /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2C1DEF7777CBA80860C87679 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				6E0FEDB486045370CC61E8B7 /* GoshaMobileIOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		35C25DEA418ECE6E818E925B /* GoshaMobileIOS */ = {
+			isa = PBXGroup;
+			children = (
+				4FA3A5E809778681247C44B1 /* App */,
+				DE3BA52B1F72DA5F33BFD579 /* Models */,
+				E73EC007ED6BD333D004EB96 /* Networking */,
+				A967D43A64A1554152405529 /* Persistence */,
+				451480B5E97245A30E6E9733 /* Provisioning */,
+				F187F369C712E045FD2DC3E1 /* ViewModels */,
+				904E26BC4BF72D576601F175 /* Views */,
+			);
+			path = GoshaMobileIOS;
+			sourceTree = "<group>";
+		};
+		451480B5E97245A30E6E9733 /* Provisioning */ = {
+			isa = PBXGroup;
+			children = (
+				930DC766B628B73E3AF3BDC6 /* RobotWiFiJoiner.swift */,
+			);
+			path = Provisioning;
+			sourceTree = "<group>";
+		};
+		4FA3A5E809778681247C44B1 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				8E4AC65B75EC72C85B2658ED /* AppConfig.swift */,
+				8D91B22FC212BB4C8D3CE3E0 /* GoshaMobileApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		8D478827124B7BFD68FBA294 = {
+			isa = PBXGroup;
+			children = (
+				35C25DEA418ECE6E818E925B /* GoshaMobileIOS */,
+				FC0D7EA2C31A7CA8908D6B49 /* Frameworks */,
+				2C1DEF7777CBA80860C87679 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		904E26BC4BF72D576601F175 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				66B1453A12BF8FB8070F9365 /* ContentView.swift */,
+				16F44178F03C32E2EDBB339C /* ProductShellView.swift */,
+				FBEBECF8B1B98A106962031D /* WebDocumentView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A967D43A64A1554152405529 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				ED3BBD0BF98BA4685CDE535E /* OnboardingDraftStore.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
+		DE3BA52B1F72DA5F33BFD579 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				320E55866EEC6469047F1214 /* OnboardingModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		E73EC007ED6BD333D004EB96 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				18D99F46AE332A488232ED14 /* PanelAPIClient.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		F187F369C712E045FD2DC3E1 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				C85C258AB91366BA21CB3B1F /* OnboardingViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		FC0D7EA2C31A7CA8908D6B49 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				4ED0C1C9767635352E98C2F4 /* NetworkExtension.framework */,
+				296CF3EB1F548A7E12D0BBBD /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		EE8CD0FAAFBE8541AB784A26 /* GoshaMobileIOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DCE76936655744AAAAF5DF40 /* Build configuration list for PBXNativeTarget "GoshaMobileIOS" */;
+			buildPhases = (
+				6E0760A87B728406FF1D9BEC /* Sources */,
+				A83335FD500C8CD22718F0AF /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GoshaMobileIOS;
+			productName = GoshaMobileIOS;
+			productReference = 6E0FEDB486045370CC61E8B7 /* GoshaMobileIOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		97CA18EABF7CF3F8604A17B8 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1200;
+				TargetAttributes = {
+					EE8CD0FAAFBE8541AB784A26 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 182B91C2B6135B971C293297 /* Build configuration list for PBXProject "GoshaMobileIOS" */;
+			compatibilityVersion = "Xcode 11.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 8D478827124B7BFD68FBA294;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EE8CD0FAAFBE8541AB784A26 /* GoshaMobileIOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6E0760A87B728406FF1D9BEC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB2D6A307DF152B4A4A8D6FC /* AppConfig.swift in Sources */,
+				BDB744EFE0D7D387D3189456 /* ContentView.swift in Sources */,
+				38984DAA5368D15063124BC9 /* GoshaMobileApp.swift in Sources */,
+				29E129B2FB00D9337CEFB593 /* OnboardingDraftStore.swift in Sources */,
+				5BA31473B3DFB2912EB1447E /* OnboardingModels.swift in Sources */,
+				D8C04F70206BE4A151AE0B38 /* OnboardingViewModel.swift in Sources */,
+				ABD2171BFD097179D16C2506 /* PanelAPIClient.swift in Sources */,
+				E768C34A83982BDD3E0ED020 /* ProductShellView.swift in Sources */,
+				B5C5304E8CB70848328175CF /* RobotWiFiJoiner.swift in Sources */,
+				D6E56347BE21F88E6949FA71 /* WebDocumentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		070E8A845FD8453C4A597309 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		1CD6F5494926F5032DBC3BEE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		45D0280CDA3C555668DFF123 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GoshaMobileIOS/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.maxcorp.gosha.mobile.ios;
+				PRODUCT_NAME = "Гоша";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AD044AC2210FC0EE2AD5B86F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GoshaMobileIOS/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.maxcorp.gosha.mobile.ios;
+				PRODUCT_NAME = "Гоша";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		182B91C2B6135B971C293297 /* Build configuration list for PBXProject "GoshaMobileIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				070E8A845FD8453C4A597309 /* Debug */,
+				1CD6F5494926F5032DBC3BEE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DCE76936655744AAAAF5DF40 /* Build configuration list for PBXNativeTarget "GoshaMobileIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				45D0280CDA3C555668DFF123 /* Debug */,
+				AD044AC2210FC0EE2AD5B86F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 97CA18EABF7CF3F8604A17B8 /* Project object */;
+}

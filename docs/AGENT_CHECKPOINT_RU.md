@@ -54,6 +54,38 @@
 - Текущий путь исходников Android пока лежит в старом дереве:
   - `/home/max/GOSHA_MOBILE/app/src/main/java/com/maxcorp/edgeconnector`
   Это технический хвост копирования, а не старый продуктовый бренд.
+- В этот же репозиторий уже добавлен отдельный iOS-каркас:
+  - `/Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS`
+- Для iOS уже создан отдельный GitHub-репозиторий:
+  - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
+- Локальный отдельный рабочий корень iOS:
+  - `/Users/maksim/Developer/GOSHA_MOBILE_IOS`
+- iOS-каркас уже адаптирован к текущему контракту `GOSHA_PLATFORM`:
+  - `bundle.mobile_profile`
+  - честный runtime `connectivity`
+  - `GOSHA-` как основной Wi-Fi префикс
+  - `Xiaozhi-` как переходный запасной префикс
+- Для iOS уже локально собран `XcodeGen 2.30.0`:
+  - `/Users/maksim/bin/xcodegen`
+- Через него уже создан:
+  - `/Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS/GoshaMobileIOS.xcodeproj`
+- Локальная Swift-проверка уже подтверждена:
+  - `xcrun swiftc -typecheck ...`
+- И уже подтверждена Xcode-сборка без signing для симулятора:
+  - `xcodebuild ... CODE_SIGNING_ALLOWED=NO build`
+- В iOS `Info.plist` уже добавлены:
+  - явные `panel/legal/portal` URL;
+  - `GOSHA-` + `Xiaozhi-` SSID prefixes;
+  - `ATS`-исключения для `151.241.228.232:18876` и `192.168.4.1`;
+  - `NSLocalNetworkUsageDescription`
+- И уже подтверждён симуляторный install/launch:
+  - `xcrun simctl install booted .../Гоша.app`
+  - `xcrun simctl launch booted com.maxcorp.gosha.mobile.ios`
+- Добавлен локальный механизм актуализации репозиториев:
+  - `/Users/maksim/bin/gosha_repo_sync.sh`
+  - `launchd` job `com.maxcorp.gosha-repo-sync`
+  - отчёт статуса:
+    - `/Users/maksim/Developer/.gosha-sync/last_report.txt`
 
 ## Главный ближайший приоритет
 
@@ -67,6 +99,15 @@
    - при живом прогоне отдельно проверить новую честную ветку:
      - `local_host` есть -> робот найден локально
      - `local_host` пустой, но `connectivity.connected=true` -> робот подтверждён только через платформу
-5. Отдельно позже добить живую радиопроверку переходного префикса `Xiaozhi-*`.
-6. Не путать мобильные симптомы с голосовым движком:
+5. Для iOS ближайшая точка продолжения теперь зафиксирована в:
+   - `docs/GOSHA_MOBILE_IOS_HANDOFF_RU.md`
+   Там следующий шаг:
+   - при iOS-first работе перейти в отдельный репозиторий `GOSHA_MOBILE_IOS`;
+   - использовать совместимый с `Xcode 13.2.1` iPhone/iOS или более новый Mac/Xcode;
+   - либо сначала достать настоящий `DeviceSupport/DDI` для `26.1 (23B85)` из более нового Xcode;
+   - затем открыть готовый `.xcodeproj` в Xcode;
+   - настроить signing;
+   - проверить живой сценарий на iPhone.
+6. Отдельно позже добить живую радиопроверку переходного префикса `Xiaozhi-*`.
+7. Не путать мобильные симптомы с голосовым движком:
    - жалобы на тембр и разнообразие голоса закрываются в `GOSHA_PLATFORM`, а не в Android-клиенте.

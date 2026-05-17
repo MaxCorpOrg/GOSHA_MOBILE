@@ -12,11 +12,20 @@
 6. `docs/PROJECT_STATUS_RU.md`
 7. Если работаешь с Android-кодом:
    - `app/AGENTS.md`
+8. Если работаешь с iOS-кодом:
+   - `ios/AGENTS.md`
+   - `docs/GOSHA_MOBILE_IOS_HANDOFF_RU.md`
+   - при iOS-first задаче предпочитай отдельный репозиторий:
+     - `/Users/maksim/Developer/GOSHA_MOBILE_IOS`
+     - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
 
 ## Что это за проект
 
 - Это отдельный Android-клиент платформы `Гоша`.
+- Теперь это Android-first репозиторий.
 - Он больше не должен развиваться как часть `AI_ROBOT`.
+- Для iOS уже выделен отдельный репозиторий:
+  - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
 - Старый клиент из `AI_ROBOT` остаётся легаси-контуром для сравнения и миграции.
 
 ## Что важно помнить

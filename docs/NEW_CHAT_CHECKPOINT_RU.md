@@ -11,6 +11,9 @@
 5. `PROJECT_STATUS_RU.md`
 6. Если работаешь с Android-кодом:
    - `../app/AGENTS.md`
+7. Если работаешь с iOS-кодом:
+   - `../ios/AGENTS.md`
+   - `GOSHA_MOBILE_IOS_HANDOFF_RU.md`
 
 ## Что уже сделано
 
@@ -28,6 +31,36 @@
 - Проект уже подтверждён локальной сборкой:
   - `assembleClientDebug`
   - `testClientDebugUnitTest`
+- В репозиторий уже добавлен отдельный iOS-каркас:
+  - `ios/GoshaMobileIOS`
+- Для iOS уже создан отдельный GitHub-репозиторий:
+  - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
+- Локальный отдельный рабочий корень iOS:
+  - `/Users/maksim/Developer/GOSHA_MOBILE_IOS`
+- iOS-каркас уже переведён на новый контракт `GOSHA_PLATFORM`:
+  - `bundle.mobile_profile`
+  - runtime `connectivity`
+  - `GOSHA-` + переходный `Xiaozhi-`
+- Для iOS уже локально собран `XcodeGen 2.30.0`:
+  - `/Users/maksim/bin/xcodegen`
+- Через него уже создан:
+  - `ios/GoshaMobileIOS/GoshaMobileIOS.xcodeproj`
+- Локальная Swift-проверка уже подтверждена:
+  - `xcrun swiftc -typecheck ...`
+- И уже подтверждена сборка через:
+  - `xcodebuild ... CODE_SIGNING_ALLOWED=NO build`
+- В iOS `Info.plist` уже добавлены:
+  - явные `panel/legal/portal` URL;
+  - `GOSHA-` + `Xiaozhi-` SSID prefixes;
+  - `ATS`-исключения для `151.241.228.232:18876` и `192.168.4.1`;
+  - `NSLocalNetworkUsageDescription`
+- И уже подтверждён запуск в iOS Simulator:
+  - `xcrun simctl install booted .../Гоша.app`
+  - `xcrun simctl launch booted com.maxcorp.gosha.mobile.ios`
+- Для репозиториев `GOSHA_PLATFORM` и `GOSHA_MOBILE` уже поднят локальный фоновой sync:
+  - скрипт `/Users/maksim/bin/gosha_repo_sync.sh`
+  - `launchd` job `com.maxcorp.gosha-repo-sync`
+  - отчёт `/Users/maksim/Developer/.gosha-sync/last_report.txt`
 - Общая карта связанных контуров теперь зафиксирована в:
   - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
 - Исправлена честность runtime-снимка:
@@ -45,6 +78,12 @@
 ## Где остановились
 
 - Нужно пройти живой сценарий на телефоне и роботе уже после фикса `connectivity`.
+- Для iOS основной дальнейший контур теперь отдельный:
+  - `GOSHA_MOBILE_IOS`
+- iOS-каркас уже доведён до реального Xcode-проекта и первого запуска в симуляторе.
+- Живой запуск iOS на подключённом iPhone сейчас заблокирован несовместимостью:
+  - на машине `Xcode 13.2.1`
+  - на телефоне `iOS 26.1`
 - Нужно проверить и дополировать локальный портал `192.168.4.1`.
 - Нужно сделать чуть понятнее тексты про то, найден робот локально, через панель или ещё не подтверждён.
 - Нужно живьём перепроверить новую ветку "подтверждён только через платформу, локальный адрес ещё уточняется".
@@ -56,3 +95,9 @@
 2. Убедиться, что новый пакет подключения из `GOSHA_PLATFORM` читается без регрессий.
 3. Пройти живой сценарий подключения робота и убедиться, что больше нет ложного "подключено через панель".
 4. После исправления локального портала повторно проверить плавность возврата из режима точки доступа.
+5. Для iOS:
+   - перейти в отдельный репозиторий `GOSHA_MOBILE_IOS`;
+   - взять совместимый с `Xcode 13.2.1` iPhone/iOS или перейти на более новый Mac/Xcode;
+   - затем открыть `GoshaMobileIOS.xcodeproj` в Xcode;
+   - настроить signing;
+   - пройти живой сценарий на iPhone.

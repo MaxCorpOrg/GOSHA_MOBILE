@@ -1,0 +1,31 @@
+name: GoshaMobileIOS
+
+configs:
+  Debug: debug
+  Release: release
+
+targets:
+  GoshaMobileIOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: GoshaMobileIOS
+        excludes:
+          - Info.plist
+    info:
+      path: GoshaMobileIOS/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maxcorp.gosha.mobile.ios
+        PRODUCT_NAME: Гоша
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: GoshaMobileIOS/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    dependencies:
+      - sdk: NetworkExtension.framework
+      - sdk: WebKit.framework

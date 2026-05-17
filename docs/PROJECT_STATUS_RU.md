@@ -78,6 +78,45 @@
 - Подтверждён канонический Android-пакет проверок после этой правки:
   - `./gradlew --no-daemon clean assembleClientDebug testClientDebugUnitTest lintClientDebug`
   - запускать эти задачи нужно последовательно одним вызовом, а не параллельно, чтобы не получать ложные сбои в `build/`
+- В `GOSHA_MOBILE` добавлен отдельный iOS-каркас:
+  - `ios/GoshaMobileIOS`
+- Для iOS уже создан отдельный GitHub-репозиторий:
+  - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
+- Локальный отдельный рабочий корень iOS:
+  - `/Users/maksim/Developer/GOSHA_MOBILE_IOS`
+- iOS-каркас переведён на новый контракт `GOSHA_PLATFORM`:
+  - адреса `18876/18080`
+  - `bundle.mobile_profile`
+  - runtime `connectivity`
+  - основной префикс `GOSHA-`
+  - переходный префикс `Xiaozhi-`
+- Для iOS локально собран совместимый `XcodeGen 2.30.0`:
+  - `/Users/maksim/bin/xcodegen`
+- Через него уже сгенерирован реальный Xcode-проект:
+  - `ios/GoshaMobileIOS/GoshaMobileIOS.xcodeproj`
+- Для iOS уже подтверждена локальная проверка:
+  - `xcrun swiftc -typecheck -sdk ...`
+- И уже подтверждена сборка проекта через `xcodebuild` для симулятора без signing:
+  - `xcodebuild -project ... -scheme GoshaMobileIOS -sdk iphonesimulator ... build`
+- В `Info.plist` iOS-каркаса уже зафиксирован явный runtime-конфиг:
+  - `GoshaPanelBaseURL`
+  - `GoshaPrivacyPolicyURL`
+  - `GoshaTermsOfUseURL`
+  - `GoshaRobotPortalURL`
+  - `GoshaRobotSSIDPrefixes`
+- Для dev-контура в iOS уже добавлены нужные сетевые разрешения:
+  - `ATS`-исключение для `151.241.228.232:18876`
+  - `ATS`-исключение для `192.168.4.1`
+  - `NSLocalNetworkUsageDescription`
+- Для iOS уже подтверждён симуляторный install/launch:
+  - `xcrun simctl install booted .../Гоша.app`
+  - `xcrun simctl launch booted com.maxcorp.gosha.mobile.ios`
+- Для локального сопровождения обоих репозиториев добавлен безопасный sync-механизм:
+  - `/Users/maksim/bin/gosha_repo_sync.sh`
+  - `launchd` job `com.maxcorp.gosha-repo-sync`
+  - job делает `fetch --all --prune` и выполняет `pull --ff-only` только на чистой ветке без локальных коммитов
+  - текущий отчёт сохраняется в:
+    - `/Users/maksim/Developer/.gosha-sync/last_report.txt`
 
 ## На чем остановились
 
@@ -90,6 +129,21 @@
   - `HotspotPortalActivity` открывается
   - телефон действительно находится в `GOSHA-A-1BE1`
   - но локальный портал `192.168.4.1` в текущем прогоне показал пустой чёрный экран
+- Для iOS новый ближайший блокер уже другой:
+  - каркас есть, `.xcodeproj` уже сгенерирован, `xcodebuild` проходит и запуск в iOS Simulator подтверждён;
+  - iOS-код уже выделен в отдельный репозиторий, поэтому дальнейшая iOS-разработка может идти отдельно от Android-клиента;
+  - живой прогон на реальном iPhone сейчас упирается не в код приложения, а в toolchain-совместимость;
+  - на этой машине стоит `Xcode 13.2.1`, а подключённый iPhone на `iOS 26.1` не поддерживается этим Xcode, поэтому device run и signing-проверка здесь пока заблокированы
+- Дополнительно уже проверена hack-ветка с подменой `DeviceSupport/DDI`:
+  - временная подложка `26.1 -> 15.2` и `26.1 (23B85) -> 15.2` убрала ошибку `Could not locate device support files`
+  - после этого Xcode действительно дошёл до mount `DeveloperDiskImage`
+  - но упёрся в `AMDeviceMountImage` / `0xE8000007` / `The argument is invalid`
+  - значит простой alias/symlink не решает задачу
+  - для следующей попытки нужен уже реальный `DeveloperDiskImage` под `26.1 (23B85)`
+  - временные ссылки после проверки уже удалены
+- Отдельно проверен встроенный системный путь:
+  - `MobileDeviceUpdater` на Big Sur запускается и делает `SU query` по тегу `DEVICESUPPORT`
+  - но по текущим логам не видно, что он нашёл и скачал подходящий asset для этого устройства
 - Из-за этого пока не подтверждено:
   - завершение настройки робота через локальную страницу
   - переход в главное меню приложения после подключения робота
@@ -114,3 +168,10 @@
    - понятнее объяснить, что робот найден локально, через панель или ещё не подтверждён
    - не требовать лишнего перезапуска приложения
 4. После этого зафиксировать первую полностью рабочую контрольную точку `GOSHA_MOBILE`.
+5. Для iOS:
+   - основной отдельный контур теперь `GOSHA_MOBILE_IOS`;
+   - использовать либо iPhone/iOS, совместимый с `Xcode 13.2.1`, либо более новый Mac/Xcode;
+   - либо, если продолжать эксперимент на этой машине, сначала добыть настоящий `DeviceSupport/DDI` для `26.1 (23B85)` из более нового Xcode;
+   - затем открыть готовый Xcode-проект;
+   - настроить signing и проверить живой сценарий на iPhone;
+   - затем перейти к signing и App Store пакету.

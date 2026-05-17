@@ -13,15 +13,24 @@
    - `docs/PROJECT_STATUS_RU.md`
 2. Если работаешь с Android-кодом, дополнительно открой:
    - `app/AGENTS.md`
-3. Если правка затрагивает только серверный пакет подключения, сначала проверь связанную документацию в:
+3. Если работаешь с iOS-кодом, дополнительно открой:
+   - `ios/AGENTS.md`
+   - `docs/GOSHA_MOBILE_IOS_HANDOFF_RU.md`
+   - отдельный iOS-репозиторий:
+     - `/Users/maksim/Developer/GOSHA_MOBILE_IOS`
+     - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
+4. Если правка затрагивает только серверный пакет подключения, сначала проверь связанную документацию в:
    - `/home/max/GOSHA_PLATFORM/AGENTS.md`
    - `/home/max/GOSHA_PLATFORM/docs/PROJECT_STATUS_RU.md`
 
 ## Что это за проект
 
 - `GOSHA_MOBILE` — отдельный Android-клиент платформы `Гоша`.
+- Этот репозиторий теперь считается Android-first контуром.
 - Это самостоятельный проект, созданный одноразовым копированием из старого Android-клиента `AI_ROBOT`.
 - После копирования это уже независимый контур.
+- Для iOS теперь создан отдельный репозиторий:
+  - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
 - Старое опубликованное приложение из `AI_ROBOT` считается легаси-контуром и не является основным объектом этой папки.
 - Если нужно быстро понять, где сервер, голоса, прошивка и мобильный контракт, сначала смотри:
   - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
