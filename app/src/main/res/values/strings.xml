@@ -55,6 +55,9 @@
     <string name="diagnostics_panel_skipped_permission_required">панель не проверялась: сначала нужны права Android на поиск Wi‑Fi</string>
     <string name="diagnostics_panel_skipped_no_internet">панель не проверялась: телефон еще не вернулся в домашнюю сеть</string>
     <string name="diagnostics_panel_delayed_local_search">панель пока не проверялась: даю роботу время поднять сеть после подключения</string>
+    <string name="diagnostics_local_platform_only">локальный адрес ещё не подтверждён; робот уже вышел на связь с платформой</string>
+    <string name="diagnostics_panel_connected_host">панель подтверждает локальный адрес робота: %1$s</string>
+    <string name="diagnostics_panel_connected_platform">панель подтверждает, что робот уже на связи с платформой, но локальный адрес ещё не пришёл</string>
 
     <string name="welcome_step_title">1. Начало</string>
     <string name="welcome_body_main">Привет, вы подключаете робота. Для начала проверьте, выключен ли у вас VPN.</string>
@@ -143,6 +146,8 @@
     <string name="wifi_robot_already_connected_toast">Робот уже подключен</string>
     <string name="wifi_robot_hotspot_hidden_normal">Робот уже подключен к домашнему Wi‑Fi. Сеть GOSHA-... больше не видна — это нормально.</string>
     <string name="wifi_robot_resolving_address">Робот уже подключен к домашнему Wi‑Fi. Адрес уточняется автоматически.</string>
+    <string name="wifi_robot_connected_platform">Робот уже на связи с платформой. Локальный адрес ещё уточняется автоматически.</string>
+    <string name="wifi_robot_connected_platform_toast">Робот уже на связи с платформой</string>
     <string name="wifi_connected_done">Робот подключен к домашнему Wi‑Fi.</string>
     <string name="button_connect_robot">Подключить робота</string>
     <string name="button_open_robot_connect">Открыть подключение робота</string>

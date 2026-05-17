@@ -52,9 +52,11 @@
 
 ```bash
 cd /home/max/GOSHA_MOBILE
-./gradlew --no-daemon assembleClientDebug
-./gradlew --no-daemon testClientDebugUnitTest
+./gradlew --no-daemon clean assembleClientDebug testClientDebugUnitTest lintClientDebug
 ```
+
+Важно:
+- после правок в flow подключения безопаснее запускать эту проверку одним последовательным вызовом, а не несколькими параллельными командами `gradlew`, чтобы не получить ложные ошибки в общем каталоге `build/`.
 
 Сборка клиентского релиза:
 

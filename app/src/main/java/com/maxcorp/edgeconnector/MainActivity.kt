@@ -1247,6 +1247,9 @@ class MainActivity : AppCompatActivity() {
     ): Boolean {
         return when (transition.route) {
             ConnectedMenuRoute.LOCAL_HOST -> {
+                updateLocalDiagnostics(getString(R.string.diagnostics_local_found, transition.localHost))
+                diagnosticsPanel = getString(R.string.diagnostics_panel_connected_host, transition.localHost)
+                renderDiagnostics()
                 maybeHandleRobotFound(
                     host = transition.localHost,
                     statusText = statusText,
@@ -1261,11 +1264,14 @@ class MainActivity : AppCompatActivity() {
                 robotWifiConnectTimeoutJob?.cancel()
                 wifiBackToMenuMode = false
                 persistDraft(configStore.loadDraft().copy(robotHost = "", wifiReconnectPending = false))
-                tvRobotCheck.text = statusText
-                tvSuccessMessage.text = getString(R.string.wifi_robot_found_success)
-                setStatus(getString(R.string.runtime_status_robot_found))
+                tvRobotCheck.text = getString(R.string.wifi_robot_resolving_address)
+                tvSuccessMessage.text = getString(R.string.wifi_robot_connected_platform)
+                updateLocalDiagnostics(getString(R.string.diagnostics_local_platform_only))
+                diagnosticsPanel = getString(R.string.diagnostics_panel_connected_platform)
+                renderDiagnostics()
+                setStatus(getString(R.string.runtime_status_address_pending))
                 showStep(WizardStep.MENU)
-                toast(toastText)
+                toast(getString(R.string.wifi_robot_connected_platform_toast))
                 true
             }
         }
