@@ -6,7 +6,12 @@
 
 ## Текущая рабочая точка
 
-- Репозиторий локальный и пока без удалённого сервера.
+- Для репозитория уже настроен удалённый `origin`:
+  - `git@github.com:MaxCorpOrg/GOSHA_MOBILE.git`
+- Ветка `main` уже отправлена в GitHub и отслеживает:
+  - `origin/main`
+- Публичный адрес репозитория:
+  - `https://github.com/MaxCorpOrg/GOSHA_MOBILE`
 - Общая карта связанных контуров:
   - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
 - Проект создан из старого Android-клиента как самостоятельная копия.

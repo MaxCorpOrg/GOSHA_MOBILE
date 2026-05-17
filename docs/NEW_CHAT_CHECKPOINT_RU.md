@@ -15,6 +15,12 @@
 ## Что уже сделано
 
 - Создан отдельный Android-проект `GOSHA_MOBILE`.
+- Для проекта уже настроен `origin`:
+  - `git@github.com:MaxCorpOrg/GOSHA_MOBILE.git`
+- Ветка `main` уже отправлена в GitHub и отслеживает:
+  - `origin/main`
+- Публичный URL проекта:
+  - `https://github.com/MaxCorpOrg/GOSHA_MOBILE`
 - Новый клиент переводится на бренд `Гоша`.
 - Старый контур `AI_ROBOT` больше не является рабочим корнем этого проекта.
 - В клиент добавляется чтение `mobile_profile` из `GOSHA_PLATFORM`.

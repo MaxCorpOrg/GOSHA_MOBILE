@@ -4,6 +4,12 @@
 
 - Создан отдельный локальный проект `GOSHA_MOBILE`.
 - Проект инициализирован как самостоятельный git-репозиторий.
+- Для `GOSHA_MOBILE` уже настроен удалённый `origin`:
+  - `git@github.com:MaxCorpOrg/GOSHA_MOBILE.git`
+- Выполнен первый `push` в GitHub:
+  - ветка `main` уже отслеживает `origin/main`
+- Публичный репозиторий мобильного клиента теперь доступен по адресу:
+  - `https://github.com/MaxCorpOrg/GOSHA_MOBILE`
 - Исходники взяты одноразовым копированием из старого Android-клиента `AI_ROBOT`.
 - Общая карта всех связанных контуров зафиксирована в:
   - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
