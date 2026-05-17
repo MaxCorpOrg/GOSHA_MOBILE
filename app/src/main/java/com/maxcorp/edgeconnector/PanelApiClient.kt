@@ -39,6 +39,12 @@ data class RobotRuntimeSnapshot(
     val transportState: String,
     val target: String,
     val localHost: String,
+    val connectivityEvidence: String,
+    val verifiedNow: Boolean,
+    val freshDeviceContact: Boolean,
+    val lastSeenIso: String,
+    val boardName: String,
+    val appVersion: String,
 )
 
 data class SelfhostXiaozhiBundle(
@@ -403,27 +409,81 @@ object PanelApiClient {
                     .firstOrNull { it.optString("robot_id", "") == robotId }
             }
             ?: return@withContext null
+        parseRobotRuntimeSnapshot(item, robotId)
+    }
+
+    internal fun parseRobotRuntimeSnapshot(item: JSONObject, robotId: String): RobotRuntimeSnapshot {
         val diagnostics = item.optJSONObject("diagnostics") ?: JSONObject()
         val control = item.optJSONObject("control") ?: JSONObject()
-        val target = diagnostics.optString("target", "")
-            .ifBlank { control.optString("fallback_ws_url", "") }
-        val mode = diagnostics.optString("mode", "")
-            .ifBlank { control.optString("transport", "") }
-        val transportState = diagnostics.optString("transport_state", "")
-        val controlConfigured = control.optBoolean("configured", false)
-        val localHost = parseLocalHost(target)
+        val cloudConsole = item.optJSONObject("cloud_console") ?: JSONObject()
+        val connectivity = item.optJSONObject("connectivity") ?: JSONObject()
+        val detection = item.optJSONObject("detection") ?: JSONObject()
+        return buildRobotRuntimeSnapshot(
+            robotId = robotId,
+            diagnosticsTarget = diagnostics.optString("target", ""),
+            fallbackWsUrl = control.optString("fallback_ws_url", ""),
+            diagnosticsMode = diagnostics.optString("mode", ""),
+            controlTransport = control.optString("transport", ""),
+            transportState = diagnostics.optString("transport_state", ""),
+            connectivityHasConnected = connectivity.has("connected"),
+            connectivityConnected = connectivity.optBoolean("connected", false),
+            connectivityLocalHost = connectivity.optString("local_host", ""),
+            connectivityEvidence = connectivity.optString("evidence", ""),
+            connectivityVerifiedNow = connectivity.optBoolean("verified_now", detection.optBoolean("verified_now", false)),
+            connectivityFreshDeviceContact = connectivity.optBoolean("fresh_device_contact", false),
+            connectivityLastSeenIso = connectivity.optString("last_seen_iso", ""),
+            connectivityBoardName = connectivity.optString("board_name", ""),
+            connectivityAppVersion = connectivity.optString("app_version", ""),
+            cloudLastSeenIso = cloudConsole.optString("last_seen_iso", ""),
+            cloudBoardName = cloudConsole.optString("board_name", ""),
+            cloudAppVersion = cloudConsole.optString("app_version", ""),
+        )
+    }
+
+    internal fun buildRobotRuntimeSnapshot(
+        robotId: String,
+        diagnosticsTarget: String,
+        fallbackWsUrl: String,
+        diagnosticsMode: String,
+        controlTransport: String,
+        transportState: String,
+        connectivityHasConnected: Boolean,
+        connectivityConnected: Boolean,
+        connectivityLocalHost: String,
+        connectivityEvidence: String,
+        connectivityVerifiedNow: Boolean,
+        connectivityFreshDeviceContact: Boolean,
+        connectivityLastSeenIso: String,
+        connectivityBoardName: String,
+        connectivityAppVersion: String,
+        cloudLastSeenIso: String,
+        cloudBoardName: String,
+        cloudAppVersion: String,
+    ): RobotRuntimeSnapshot {
+        val target = diagnosticsTarget.ifBlank { fallbackWsUrl }
+        val mode = diagnosticsMode.ifBlank { controlTransport }
+        val directLocalHost = parseLocalHost(target)
+        val normalizedConnectivityLocalHost = directRobotHostOrBlank(connectivityLocalHost)
+        val localHost = normalizedConnectivityLocalHost.ifBlank { directLocalHost }
         val panelConnected = when {
             localHost.isNotBlank() -> true
-            mode == "cloud-mcp" && (transportState == "reachable" || controlConfigured) -> true
+            connectivityHasConnected -> connectivityConnected
+            mode == "cloud-mcp" && transportState == "reachable" -> true
             else -> false
         }
-        RobotRuntimeSnapshot(
+        return RobotRuntimeSnapshot(
             robotId = robotId,
             connected = panelConnected,
             mode = mode,
             transportState = transportState,
             target = target,
             localHost = localHost,
+            connectivityEvidence = connectivityEvidence,
+            verifiedNow = connectivityVerifiedNow,
+            freshDeviceContact = connectivityFreshDeviceContact,
+            lastSeenIso = connectivityLastSeenIso.ifBlank { cloudLastSeenIso },
+            boardName = connectivityBoardName.ifBlank { cloudBoardName },
+            appVersion = connectivityAppVersion.ifBlank { cloudAppVersion },
         )
     }
 

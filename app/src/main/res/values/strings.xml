@@ -39,7 +39,7 @@
     <string name="diagnostics_panel_robot_id_empty">robot_id пустой, панель не проверялась</string>
     <string name="diagnostics_panel_error">ошибка панели: %1$s</string>
     <string name="diagnostics_local_found">найден: %1$s</string>
-    <string name="diagnostics_panel_snapshot">mode=%1$s, transport=%2$s, localHost=%3$s, connected=%4$s</string>
+    <string name="diagnostics_panel_snapshot">mode=%1$s, transport=%2$s, localHost=%3$s, connected=%4$s, evidence=%5$s, lastSeen=%6$s</string>
     <string name="diagnostics_local_searching_robot_wifi">ищу рядом сеть робота GOSHA</string>
     <string name="diagnostics_local_wait_robot_wifi">телефон еще в сети робота: %1$s</string>
     <string name="diagnostics_local_robot_visible_nearby">рядом видна сеть робота: %1$s</string>

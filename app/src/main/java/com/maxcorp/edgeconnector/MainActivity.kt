@@ -543,7 +543,9 @@ class MainActivity : AppCompatActivity() {
                 snapshot.mode.ifBlank { getString(R.string.diagnostics_empty) },
                 snapshot.transportState.ifBlank { getString(R.string.diagnostics_empty) },
                 snapshot.localHost.ifBlank { getString(R.string.diagnostics_empty) },
-                if (snapshot.connected) getString(R.string.diagnostics_yes) else getString(R.string.diagnostics_no)
+                if (snapshot.connected) getString(R.string.diagnostics_yes) else getString(R.string.diagnostics_no),
+                snapshot.connectivityEvidence.ifBlank { getString(R.string.diagnostics_empty) },
+                snapshot.lastSeenIso.ifBlank { getString(R.string.diagnostics_empty) }
             )
         }
         renderDiagnostics()
