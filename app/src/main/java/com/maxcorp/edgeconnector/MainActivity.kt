@@ -1572,19 +1572,9 @@ class MainActivity : AppCompatActivity() {
         robotProvisionCheckJob?.cancel()
         resumeDiscoveryJob?.cancel()
         setStatus(getString(R.string.runtime_status_open_portal))
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ROBOT_PORTAL_URL)).apply {
-            addCategory(Intent.CATEGORY_BROWSABLE)
+        if (RobotBranding.isRobotWifiSsid(WifiInfoHelper.currentSsid(this), robotWifiPrefix)) {
+            RobotWifiConnector.bindToCurrentRobotWifi(this)
         }
-        val openedInBrowser = runCatching {
-            startActivity(browserIntent)
-        }.isSuccess
-        if (openedInBrowser) {
-            toast(getString(R.string.portal_browser_toast))
-            return
-        }
-
-        Log.w(logTag, "Failed to open browser for robot portal, fallback to WebView activity")
-        toast(getString(R.string.portal_browser_fallback_toast))
         startActivity(Intent(this, HotspotPortalActivity::class.java))
     }
 

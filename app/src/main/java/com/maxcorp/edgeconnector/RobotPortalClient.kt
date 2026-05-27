@@ -1,6 +1,8 @@
 package com.maxcorp.gosha.mobile
 
 import android.content.Context
+import android.net.Network
+import android.util.Log
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -8,6 +10,7 @@ import java.net.URL
 import java.net.URLEncoder
 
 object RobotPortalClient {
+    private const val LOG_TAG = "RobotPortalClient"
     private const val PORTAL_BASE_URL = "http://192.168.4.1"
 
     data class PortalResponse(
@@ -96,7 +99,45 @@ object RobotPortalClient {
         body: ByteArray?,
         contentType: String?,
     ): PortalResponse {
-        val network = RobotWifiConnector.preferredNetwork(context)
+        val candidates = buildList<Network?> {
+            add(RobotWifiConnector.preferredNetwork(context))
+            add(RobotWifiConnector.currentRobotWifiNetwork(context))
+            add(null)
+        }.distinct()
+
+        var lastResponse: PortalResponse? = null
+        var lastError: Exception? = null
+        for (network in candidates) {
+            try {
+                val response = openOnce(url, method, body, contentType, network)
+                Log.d(
+                    LOG_TAG,
+                    "Portal request candidate=${network ?: "default"} url=$url code=${response.code} type=${response.contentType} bytes=${response.bodyBytes.size}"
+                )
+                if (response.code != 0 || response.bodyBytes.isNotEmpty()) {
+                    return response
+                }
+                lastResponse = response
+            } catch (error: Exception) {
+                lastError = error
+                Log.w(
+                    LOG_TAG,
+                    "Portal request failed on candidate=${network ?: "default"} for $method $url: ${error.message}",
+                    error
+                )
+            }
+        }
+
+        return lastResponse ?: throw lastError ?: IllegalStateException("No portal route available")
+    }
+
+    private fun openOnce(
+        url: String,
+        method: String,
+        body: ByteArray?,
+        contentType: String?,
+        network: Network?,
+    ): PortalResponse {
         val connection = ((network?.openConnection(URL(url)) ?: URL(url).openConnection()) as HttpURLConnection).apply {
             connectTimeout = 2500
             readTimeout = 4000

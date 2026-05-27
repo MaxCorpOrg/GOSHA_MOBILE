@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.PatternMatcher
 import android.util.Log
 import androidx.core.content.ContextCompat
+import java.net.Inet4Address
 
 object RobotWifiConnector {
     private const val LOG_TAG = "GoshaRobotWifi"
@@ -134,7 +135,11 @@ object RobotWifiConnector {
             }
         }
 
-        val robotNetwork = findRobotWifiNetwork(manager) ?: return false
+        val robotNetwork = findRobotWifiNetwork(manager)
+        if (robotNetwork == null) {
+            Log.w(LOG_TAG, "bindToCurrentRobotWifi could not find robot network. active=${manager.activeNetwork}, all=${manager.allNetworks.joinToString()}")
+            return false
+        }
 
         val shouldReleaseStaleRequest = activeCallback != null && activeNetwork != null && activeNetwork != robotNetwork
         if (shouldReleaseStaleRequest) {
@@ -173,14 +178,36 @@ object RobotWifiConnector {
     }
 
     fun preferredNetwork(context: Context): Network? {
-        activeNetwork?.let { return it }
+        activeNetwork?.let {
+            Log.w(LOG_TAG, "preferredNetwork() using active requested network $it")
+            return it
+        }
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        return manager.activeNetwork
+        findRobotWifiNetwork(manager)?.let {
+            Log.w(LOG_TAG, "preferredNetwork() discovered robot network $it")
+            return it
+        }
+        val fallback = manager.activeNetwork
+        Log.w(LOG_TAG, "preferredNetwork() fallback activeNetwork=$fallback")
+        return fallback
+    }
+
+    fun currentRobotWifiNetwork(context: Context): Network? {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        return findRobotWifiNetwork(manager)
     }
 
     private fun findRobotWifiNetwork(manager: ConnectivityManager): Network? {
         return manager.allNetworks.firstOrNull { network ->
-            RobotBranding.isRobotWifiSsid(networkSsid(manager, network))
+            val capabilities = manager.getNetworkCapabilities(network)
+            if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
+                return@firstOrNull false
+            }
+            val ssid = networkSsid(manager, network)
+            if (RobotBranding.isRobotWifiSsid(ssid)) {
+                return@firstOrNull true
+            }
+            networkIpv4Address(manager, network).startsWith("192.168.4.")
         }
     }
 
@@ -191,5 +218,14 @@ object RobotWifiConnector {
         }
         val wifiInfo = capabilities.transportInfo as? android.net.wifi.WifiInfo
         return wifiInfo?.ssid.orEmpty().removePrefix("\"").removeSuffix("\"")
+    }
+
+    private fun networkIpv4Address(manager: ConnectivityManager, network: Network): String {
+        return manager.getLinkProperties(network)
+            ?.linkAddresses
+            ?.firstOrNull { it.address is Inet4Address }
+            ?.address
+            ?.hostAddress
+            .orEmpty()
     }
 }

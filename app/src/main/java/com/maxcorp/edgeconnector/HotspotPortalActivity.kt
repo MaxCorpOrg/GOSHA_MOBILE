@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -19,12 +20,14 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONObject
 
 class HotspotPortalActivity : AppCompatActivity() {
     private val logTag = "HotspotPortal"
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var webView: WebView
     private lateinit var tvPortalStatus: TextView
+    private var lastPortalUrl = PORTAL_BASE_URL
     private var reloadAttempts = 0
     private var provisionSubmitted = false
     private var provisionCompleted = false
@@ -66,7 +69,7 @@ class HotspotPortalActivity : AppCompatActivity() {
         webView.setBackgroundColor(Color.WHITE)
         webView.addJavascriptInterface(PortalBridge(), "RobotPortalBridge")
         webView.webChromeClient = object : WebChromeClient() {
-            override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                 if (consoleMessage != null) {
                     Log.d(
                         logTag,
@@ -85,8 +88,9 @@ class HotspotPortalActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString().orEmpty()
                 if (isAllowedPortalUrl(url)) {
-                    Log.d(logTag, "Allow portal navigation to $url")
-                    return false
+                    Log.d(logTag, "Intercepted portal navigation to $url")
+                    loadPortalPage(url)
+                    return true
                 }
                 Log.w(logTag, "Blocked unexpected portal navigation: $url")
                 return true
@@ -106,13 +110,15 @@ class HotspotPortalActivity : AppCompatActivity() {
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                if (request?.isForMainFrame == true) {
-                    Log.d(
-                        logTag,
-                        "Portal main-frame request: method=${request.method} url=${request.url} headers=${request.requestHeaders}"
-                    )
+                val targetUrl = request?.url?.toString().orEmpty()
+                if (targetUrl.isBlank() || !isAllowedPortalUrl(targetUrl)) {
+                    return super.shouldInterceptRequest(view, request)
                 }
-                return super.shouldInterceptRequest(view, request)
+                if (request?.isForMainFrame == true) {
+                    Log.d(logTag, "Portal main-frame request is handled separately: ${request.method} $targetUrl")
+                    return super.shouldInterceptRequest(view, request)
+                }
+                return request?.let(::proxyPortalResource) ?: super.shouldInterceptRequest(view, request)
             }
 
             override fun onReceivedHttpError(
@@ -151,13 +157,16 @@ class HotspotPortalActivity : AppCompatActivity() {
         if (resetAttempts) {
             reloadAttempts = 0
         }
+        lastPortalUrl = PORTAL_BASE_URL
         provisionSubmitted = false
         provisionCompleted = false
         waitForExitAttempts = 0
         submissionExitPollAttempts = 0
         tvPortalStatus.text = getString(R.string.portal_status_opening)
-        Log.d(logTag, "Loading portal page in WebView: $PORTAL_BASE_URL")
-        webView.loadUrl(PORTAL_BASE_URL)
+        if (RobotBranding.isRobotWifiSsid(WifiInfoHelper.currentSsid(this), ROBOT_WIFI_PREFIX)) {
+            RobotWifiConnector.bindToCurrentRobotWifi(this)
+        }
+        loadPortalPage(PORTAL_BASE_URL)
     }
 
     private fun retryLoad() {
@@ -168,7 +177,72 @@ class HotspotPortalActivity : AppCompatActivity() {
         reloadAttempts += 1
         val delayMs = if (reloadAttempts < 2) 700L else 1200L
         tvPortalStatus.text = getString(R.string.portal_status_retry, reloadAttempts)
-        mainHandler.postDelayed({ loadPortal(resetAttempts = false) }, delayMs)
+        mainHandler.postDelayed({ loadPortalPage(lastPortalUrl) }, delayMs)
+    }
+
+    private fun loadPortalPage(targetUrl: String) {
+        lastPortalUrl = targetUrl
+        tvPortalStatus.text = when {
+            provisionCompleted -> getString(R.string.portal_status_done)
+            provisionSubmitted -> getString(R.string.portal_status_submitted)
+            else -> getString(R.string.portal_status_opening)
+        }
+        Log.d(logTag, "Loading portal page through RobotPortalClient: $targetUrl")
+        Thread {
+            val result = runCatching { RobotPortalClient.fetch(this, targetUrl) }
+            runOnUiThread {
+                if (isDestroyed || isFinishing) {
+                    return@runOnUiThread
+                }
+                result.onSuccess { response ->
+                    Log.d(
+                        logTag,
+                        "Portal response: request=$targetUrl resolved=${response.url} code=${response.code} type=${response.contentType} bytes=${response.bodyBytes.size}"
+                    )
+                    val body = response.bodyText()
+                    if (response.code !in 200..299 || body.isBlank()) {
+                        retryLoad()
+                        return@onSuccess
+                    }
+                    lastPortalUrl = response.url
+                    webView.loadDataWithBaseURL(
+                        response.url,
+                        preparePortalHtml(body),
+                        resolveMimeType(response.contentType),
+                        resolveEncoding(response.contentType),
+                        response.url,
+                    )
+                }.onFailure { error ->
+                    Log.w(logTag, "Failed to load portal page $targetUrl: ${error.message}", error)
+                    retryLoad()
+                }
+            }
+        }.start()
+    }
+
+    private fun proxyPortalResource(request: WebResourceRequest): WebResourceResponse? {
+        return try {
+            val response = RobotPortalClient.request(
+                context = this,
+                target = request.url.toString(),
+                method = request.method,
+            )
+            Log.d(
+                logTag,
+                "Proxy portal resource: method=${request.method} url=${request.url} code=${response.code} type=${response.contentType} bytes=${response.bodyBytes.size}"
+            )
+            WebResourceResponse(
+                resolveMimeType(response.contentType),
+                resolveEncoding(response.contentType),
+                response.code,
+                httpReason(response.code),
+                responseHeaders(response.contentType),
+                response.bodyStream(),
+            )
+        } catch (error: Exception) {
+            Log.w(logTag, "Failed to proxy portal resource ${request.url}: ${error.message}", error)
+            null
+        }
     }
 
     private fun injectRussianHelpers() {
@@ -283,6 +357,171 @@ class HotspotPortalActivity : AppCompatActivity() {
         webView.evaluateJavascript(js, null)
     }
 
+    private fun preparePortalHtml(originalHtml: String): String {
+        val bridgeScript = buildPortalFetchBridgeScript()
+        return when {
+            originalHtml.contains("</head>", ignoreCase = true) ->
+                originalHtml.replace("</head>", "$bridgeScript\n</head>", ignoreCase = true)
+            originalHtml.contains("<body", ignoreCase = true) ->
+                "$bridgeScript\n$originalHtml"
+            else -> "$bridgeScript\n$originalHtml"
+        }
+    }
+
+    private fun buildPortalFetchBridgeScript(): String {
+        return """
+            <script>
+            (function() {
+              if (window.__maxcorpPortalFetchInstalled) return;
+              window.__maxcorpPortalFetchInstalled = true;
+              const originalFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+
+              function normalizeUrl(input) {
+                if (!input) return '';
+                if (input.startsWith('http://') || input.startsWith('https://')) return input;
+                if (input.startsWith('/')) return '${PORTAL_BASE_URL}' + input;
+                return '${PORTAL_BASE_URL}/' + input;
+              }
+
+              function isPortalUrl(input) {
+                if (!input) return false;
+                return input.startsWith('${PORTAL_BASE_URL}') || input.startsWith('http://robot.local') || input.startsWith('/');
+              }
+
+              function makeResponse(payload) {
+                const status = Number(payload.code || 0);
+                const body = typeof payload.body === 'string' ? payload.body : '';
+                return {
+                  ok: status >= 200 && status < 300,
+                  status: status,
+                  url: payload.url || '',
+                  text: async function() {
+                    return body;
+                  },
+                  json: async function() {
+                    if (!body) return {};
+                    return JSON.parse(body);
+                  }
+                };
+              }
+
+              function bindPortalForms() {
+                document.querySelectorAll('form').forEach((form) => {
+                  if (form.dataset.maxcorpSubmitBound === '1') return;
+                  form.dataset.maxcorpSubmitBound = '1';
+                  form.addEventListener('submit', function(event) {
+                    if (!window.RobotPortalBridge || !window.RobotPortalBridge.submitPortalForm) return;
+                    event.preventDefault();
+                    const formData = new URLSearchParams();
+                    new FormData(form).forEach((value, key) => {
+                      formData.append(key, typeof value === 'string' ? value : '');
+                    });
+                    const method = (form.getAttribute('method') || 'GET').toUpperCase();
+                    const action = normalizeUrl(form.getAttribute('action') || window.location.href);
+                    if (window.RobotPortalBridge.onProvisionSubmitted) {
+                      window.RobotPortalBridge.onProvisionSubmitted();
+                    }
+                    window.RobotPortalBridge.submitPortalForm(
+                      action,
+                      method,
+                      formData.toString(),
+                      'application/x-www-form-urlencoded'
+                    );
+                  });
+                });
+              }
+
+              window.fetch = function(input, init) {
+                const rawUrl = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                if (!isPortalUrl(rawUrl) || !window.RobotPortalBridge || !window.RobotPortalBridge.performPortalRequest) {
+                  if (originalFetch) {
+                    return originalFetch(input, init);
+                  }
+                  return Promise.reject(new Error('Fetch unavailable'));
+                }
+
+                const method = ((init && init.method) || 'GET').toUpperCase();
+                const body = init && typeof init.body === 'string' ? init.body : '';
+                let contentType = '';
+                if (init && init.headers) {
+                  if (typeof init.headers.get === 'function') {
+                    contentType = init.headers.get('Content-Type') || '';
+                  } else {
+                    contentType = init.headers['Content-Type'] || init.headers['content-type'] || '';
+                  }
+                }
+
+                try {
+                  const payloadText = window.RobotPortalBridge.performPortalRequest(
+                    normalizeUrl(rawUrl),
+                    method,
+                    body,
+                    contentType
+                  );
+                  const payload = JSON.parse(payloadText || '{}');
+                  if (!payload.success) {
+                    throw new Error(payload.error || 'Portal request failed');
+                  }
+                  return Promise.resolve(makeResponse(payload));
+                } catch (error) {
+                  const message = error && error.message ? error.message : String(error);
+                  return Promise.reject(new Error(message));
+                }
+              };
+
+              bindPortalForms();
+              new MutationObserver(bindPortalForms).observe(document.documentElement || document.body, {
+                childList: true,
+                subtree: true
+              });
+            })();
+            </script>
+        """.trimIndent()
+    }
+
+    private fun resolveMimeType(contentType: String): String {
+        val normalized = contentType.substringBefore(';').trim()
+        return if (normalized.isBlank()) {
+            "text/html"
+        } else {
+            normalized
+        }
+    }
+
+    private fun resolveEncoding(contentType: String): String {
+        return contentType
+            .split(';')
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("charset=", ignoreCase = true) }
+            ?.substringAfter('=')
+            ?.ifBlank { null }
+            ?: "utf-8"
+    }
+
+    private fun responseHeaders(contentType: String): MutableMap<String, String> {
+        return linkedMapOf<String, String>().apply {
+            if (contentType.isNotBlank()) {
+                put("Content-Type", contentType)
+            }
+            put("Cache-Control", "no-store")
+        }
+    }
+
+    private fun httpReason(code: Int): String {
+        return when (code) {
+            200 -> "OK"
+            204 -> "No Content"
+            301 -> "Moved Permanently"
+            302 -> "Found"
+            400 -> "Bad Request"
+            401 -> "Unauthorized"
+            403 -> "Forbidden"
+            404 -> "Not Found"
+            500 -> "Internal Server Error"
+            else -> "HTTP $code"
+        }
+    }
+
     private fun waitForRobotNetworkExit() {
         val currentSsid = WifiInfoHelper.currentSsid(this)
         if (!RobotBranding.isRobotWifiSsid(currentSsid, ROBOT_WIFI_PREFIX)) {
@@ -351,6 +590,83 @@ class HotspotPortalActivity : AppCompatActivity() {
     }
 
     private inner class PortalBridge {
+        @JavascriptInterface
+        fun performPortalRequest(
+            url: String,
+            method: String,
+            body: String?,
+            contentType: String?,
+        ): String {
+            return try {
+                Log.d(
+                    logTag,
+                    "Portal bridge request: method=$method url=$url contentType=${contentType.orEmpty()} bodyLength=${body?.length ?: 0}"
+                )
+                val response = RobotPortalClient.request(
+                    context = this@HotspotPortalActivity,
+                    target = url,
+                    method = method,
+                    body = body?.toByteArray(Charsets.UTF_8),
+                    contentType = contentType,
+                )
+                JSONObject()
+                    .put("success", true)
+                    .put("url", response.url)
+                    .put("code", response.code)
+                    .put("contentType", response.contentType)
+                    .put("body", response.bodyText())
+                    .toString()
+            } catch (error: Exception) {
+                Log.w(logTag, "Portal bridge request failed for $method $url: ${error.message}", error)
+                JSONObject()
+                    .put("success", false)
+                    .put("error", error.message ?: "unknown error")
+                    .toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun submitPortalForm(
+            url: String,
+            method: String,
+            body: String?,
+            contentType: String?,
+        ) {
+            Thread {
+                val result = runCatching {
+                    RobotPortalClient.request(
+                        context = this@HotspotPortalActivity,
+                        target = url,
+                        method = method,
+                        body = body?.toByteArray(Charsets.UTF_8),
+                        contentType = contentType,
+                    )
+                }
+                runOnUiThread {
+                    if (isDestroyed || isFinishing) {
+                        return@runOnUiThread
+                    }
+                    result.onSuccess { response ->
+                        Log.d(
+                            logTag,
+                            "Portal form response: method=$method url=$url resolved=${response.url} code=${response.code} type=${response.contentType} bytes=${response.bodyBytes.size}"
+                        )
+                        lastPortalUrl = response.url
+                        webView.loadDataWithBaseURL(
+                            response.url,
+                            preparePortalHtml(response.bodyText()),
+                            resolveMimeType(response.contentType),
+                            resolveEncoding(response.contentType),
+                            response.url,
+                        )
+                    }.onFailure { error ->
+                        Log.w(logTag, "Portal form submit failed for $method $url: ${error.message}", error)
+                        tvPortalStatus.text = getString(R.string.portal_status_error)
+                    }
+                }
+            }.start()
+        }
+
         @JavascriptInterface
         fun onProvisionSubmitted() {
             runOnUiThread {
