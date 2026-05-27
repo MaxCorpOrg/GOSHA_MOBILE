@@ -3,6 +3,7 @@ package com.maxcorp.gosha.mobile
 import android.content.Intent
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -1570,9 +1571,20 @@ class MainActivity : AppCompatActivity() {
         pendingRobotWifiSsidHint = ""
         robotProvisionCheckJob?.cancel()
         resumeDiscoveryJob?.cancel()
-        if (RobotBranding.isRobotWifiSsid(WifiInfoHelper.currentSsid(this), robotWifiPrefix)) {
-            RobotWifiConnector.bindToCurrentRobotWifi(this)
+        setStatus(getString(R.string.runtime_status_open_portal))
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ROBOT_PORTAL_URL)).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
         }
+        val openedInBrowser = runCatching {
+            startActivity(browserIntent)
+        }.isSuccess
+        if (openedInBrowser) {
+            toast(getString(R.string.portal_browser_toast))
+            return
+        }
+
+        Log.w(logTag, "Failed to open browser for robot portal, fallback to WebView activity")
+        toast(getString(R.string.portal_browser_fallback_toast))
         startActivity(Intent(this, HotspotPortalActivity::class.java))
     }
 
@@ -1715,6 +1727,10 @@ class MainActivity : AppCompatActivity() {
             localDiagnostics = getString(R.string.diagnostics_local_reconnect_pending),
             panelDiagnosticsText = getString(R.string.diagnostics_panel_skipped_reconnect_pending)
         )
+    }
+
+    companion object {
+        private const val ROBOT_PORTAL_URL = "http://192.168.4.1"
     }
 
     private fun confirmResetForNextRobot() {

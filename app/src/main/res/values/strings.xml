@@ -242,6 +242,8 @@
     <string name="portal_status_return_timeout">Робот еще переключается. Возвращаю в приложение и продолжаю проверку там...</string>
     <string name="portal_status_error">Не удалось открыть страницу робота. Проверьте, что VPN выключен, и нажмите «Обновить».</string>
     <string name="portal_status_retry">Жду страницу робота... попытка %1$d/4</string>
+    <string name="portal_browser_toast">Открыл страницу робота в системном браузере. После подключения вернитесь в приложение.</string>
+    <string name="portal_browser_fallback_toast">Не удалось открыть системный браузер. Пробую встроенный экран.</string>
 
     <string name="section_badge_loading">Значок робота</string>
     <string name="section_badge_status">Статус робота</string>
