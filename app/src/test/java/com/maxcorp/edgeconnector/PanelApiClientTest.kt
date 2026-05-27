@@ -59,6 +59,30 @@ class PanelApiClientTest {
         assertEquals("fresh_device_contact", snapshot.connectivityEvidence)
     }
 
+    @Test
+    fun `presence payload sends local host only for home wifi local state`() {
+        val payload = PanelApiClient.buildMobilePresencePayloadData(
+            state = MobilePresenceState.HOME_WIFI_LOCAL,
+            localHost = "192.168.0.103",
+        )
+
+        assertEquals("home_wifi_local", payload.state)
+        assertEquals("android_local_discovery", payload.source)
+        assertEquals("192.168.0.103", payload.localHost)
+    }
+
+    @Test
+    fun `presence payload ignores local host for non local states`() {
+        val payload = PanelApiClient.buildMobilePresencePayloadData(
+            state = MobilePresenceState.ROBOT_HOTSPOT_VISIBLE,
+            localHost = "192.168.0.103",
+        )
+
+        assertEquals("robot_hotspot_visible", payload.state)
+        assertEquals("android_local_discovery", payload.source)
+        assertEquals("", payload.localHost)
+    }
+
     private fun buildSnapshot(
         diagnosticsTarget: String = "",
         fallbackWsUrl: String = "",

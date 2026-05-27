@@ -100,6 +100,19 @@ internal object OnboardingCoordinator {
         }
     }
 
+    fun menuVisibility(
+        decision: RobotConnectivityDecision,
+        setupCompleted: Boolean,
+    ): WifiStepTransition? {
+        if (setupCompleted) {
+            return null
+        }
+        return visibility(
+            decision = decision,
+            presentation = WifiPresentationMode.OPEN_RECONNECT_STEP,
+        )
+    }
+
     fun reconnectWaiting(): WifiStepTransition {
         return WifiStepTransition(
             presentation = WifiPresentationMode.OPEN_RECONNECT_STEP,

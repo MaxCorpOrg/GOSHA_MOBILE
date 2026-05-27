@@ -35,6 +35,7 @@ private const val K_SUBSCRIPTION_NOTE = "subscription_note"
 private const val K_ONBOARDING_CODE = "onboarding_code"
 private const val K_PANEL_CLIENT_TOKEN = "panel_client_token"
 private const val K_WIFI_RECONNECT_PENDING = "wifi_reconnect_pending"
+private const val K_SETUP_COMPLETED = "setup_completed"
 private const val K_MOBILE_BRAND = "mobile_brand"
 private const val K_PORTAL_URL = "portal_url"
 private const val K_MOBILE_WEBSOCKET_URL = "mobile_websocket_url"
@@ -159,6 +160,17 @@ class ConfigStore(context: Context) {
             .apply()
     }
 
+    fun clearConfig() {
+        prefs.edit()
+            .remove(K_HUB_URL)
+            .remove(K_ROBOT_ID)
+            .remove(K_TOKEN)
+            .remove(K_ROBOT_HOST)
+            .remove(K_ROBOT_PORT)
+            .remove(K_ROBOT_PATH)
+            .apply()
+    }
+
     fun saveStatus(status: String) {
         prefs.edit()
             .putString(K_STATUS, status)
@@ -198,6 +210,7 @@ class ConfigStore(context: Context) {
             onboardingCode = prefs.getString(K_ONBOARDING_CODE, "") ?: "",
             panelClientToken = prefs.getString(K_PANEL_CLIENT_TOKEN, "") ?: "",
             wifiReconnectPending = prefs.getBoolean(K_WIFI_RECONNECT_PENDING, false),
+            setupCompleted = prefs.getBoolean(K_SETUP_COMPLETED, false),
             mobileBrand = prefs.getString(K_MOBILE_BRAND, "GOSHA") ?: "GOSHA",
             portalUrl = prefs.getString(K_PORTAL_URL, "http://192.168.4.1") ?: "http://192.168.4.1",
             mobileWebsocketUrl = prefs.getString(K_MOBILE_WEBSOCKET_URL, "") ?: "",
@@ -232,6 +245,7 @@ class ConfigStore(context: Context) {
             .putString(K_ONBOARDING_CODE, draft.onboardingCode)
             .putString(K_PANEL_CLIENT_TOKEN, draft.panelClientToken)
             .putBoolean(K_WIFI_RECONNECT_PENDING, draft.wifiReconnectPending)
+            .putBoolean(K_SETUP_COMPLETED, draft.setupCompleted)
             .putString(K_MOBILE_BRAND, draft.mobileBrand)
             .putString(K_PORTAL_URL, draft.portalUrl)
             .putString(K_MOBILE_WEBSOCKET_URL, draft.mobileWebsocketUrl)
@@ -277,6 +291,7 @@ data class OnboardingDraft(
     val onboardingCode: String = "",
     val panelClientToken: String = "",
     val wifiReconnectPending: Boolean = false,
+    val setupCompleted: Boolean = false,
     val mobileBrand: String = "GOSHA",
     val portalUrl: String = "http://192.168.4.1",
     val mobileWebsocketUrl: String = "",

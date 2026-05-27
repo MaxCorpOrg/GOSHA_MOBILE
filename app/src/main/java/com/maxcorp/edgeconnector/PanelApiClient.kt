@@ -47,6 +47,19 @@ data class RobotRuntimeSnapshot(
     val appVersion: String,
 )
 
+enum class MobilePresenceState(val wireValue: String, val acceptsLocalHost: Boolean = false) {
+    HOME_WIFI_LOCAL("home_wifi_local", acceptsLocalHost = true),
+    PHONE_ON_ROBOT_WIFI("phone_on_robot_wifi"),
+    ROBOT_HOTSPOT_VISIBLE("robot_hotspot_visible"),
+    NOT_FOUND("not_found"),
+}
+
+data class MobilePresencePayload(
+    val state: String,
+    val source: String,
+    val localHost: String = "",
+)
+
 data class SelfhostXiaozhiBundle(
     val provider: String,
     val otaUrl: String,
@@ -412,6 +425,28 @@ object PanelApiClient {
         parseRobotRuntimeSnapshot(item, robotId)
     }
 
+    suspend fun updateMobilePresence(
+        http: OkHttpClient,
+        baseUrl: String,
+        robotId: String,
+        state: MobilePresenceState,
+        localHost: String = "",
+        panelClientToken: String = "",
+        onboardingCode: String = "",
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val root = requestJson(
+            http,
+            normalizeBaseUrl(baseUrl) + "/api/mobile/robots/${robotId}/presence",
+            "POST",
+            buildMobilePresencePayload(state, localHost),
+            mobileHeaders(panelClientToken, onboardingCode),
+        )
+        if (!root.optBoolean("ok", false)) {
+            throw IOException(root.optString("error", "Не удалось передать локальный статус робота"))
+        }
+        root.optJSONObject("snapshot") ?: JSONObject()
+    }
+
     internal fun parseRobotRuntimeSnapshot(item: JSONObject, robotId: String): RobotRuntimeSnapshot {
         val diagnostics = item.optJSONObject("diagnostics") ?: JSONObject()
         val control = item.optJSONObject("control") ?: JSONObject()
@@ -484,6 +519,36 @@ object PanelApiClient {
             lastSeenIso = connectivityLastSeenIso.ifBlank { cloudLastSeenIso },
             boardName = connectivityBoardName.ifBlank { cloudBoardName },
             appVersion = connectivityAppVersion.ifBlank { cloudAppVersion },
+        )
+    }
+
+    internal fun buildMobilePresencePayload(
+        state: MobilePresenceState,
+        localHost: String = "",
+    ): JSONObject {
+        val payloadData = buildMobilePresencePayloadData(state, localHost)
+        val payload = JSONObject()
+            .put("state", payloadData.state)
+            .put("source", payloadData.source)
+        if (payloadData.localHost.isNotBlank()) {
+            payload.put("local_host", payloadData.localHost)
+        }
+        return payload
+    }
+
+    internal fun buildMobilePresencePayloadData(
+        state: MobilePresenceState,
+        localHost: String = "",
+    ): MobilePresencePayload {
+        val normalizedHost = if (state.acceptsLocalHost) {
+            directRobotHostOrBlank(localHost)
+        } else {
+            ""
+        }
+        return MobilePresencePayload(
+            state = state.wireValue,
+            source = "android_local_discovery",
+            localHost = normalizedHost,
         )
     }
 

@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
@@ -44,7 +45,15 @@ class ConnectorForegroundService : Service() {
         configStore = ConfigStore(this)
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Инициализация"))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification("Инициализация"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification("Инициализация"))
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -183,6 +192,22 @@ class ConnectorForegroundService : Service() {
     private suspend fun publishAgentStatus(hub: HubSocket, config: ConnectorConfig) {
         val (ok, error) = RobotWsProbe.probe(httpClient, config.robotWsUrl())
         setRobotWsState(ok, error)
+        if (ok) {
+            runCatching {
+                val draft = configStore.loadDraft()
+                if (draft.robotId == config.robotId) {
+                    PanelApiClient.updateMobilePresence(
+                        http = httpClient,
+                        baseUrl = draft.panelBaseUrl,
+                        robotId = config.robotId,
+                        state = MobilePresenceState.HOME_WIFI_LOCAL,
+                        localHost = config.robotHost,
+                        panelClientToken = draft.panelClientToken,
+                        onboardingCode = draft.onboardingCode,
+                    )
+                }
+            }
+        }
 
         val status = JSONObject()
             .put("connector_status", lastConnectorState)

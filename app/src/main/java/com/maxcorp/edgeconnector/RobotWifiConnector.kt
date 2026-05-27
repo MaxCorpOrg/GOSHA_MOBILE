@@ -212,6 +212,9 @@ object RobotWifiConnector {
     }
 
     private fun networkSsid(manager: ConnectivityManager, network: Network): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return ""
+        }
         val capabilities = manager.getNetworkCapabilities(network)
         if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
             return ""
