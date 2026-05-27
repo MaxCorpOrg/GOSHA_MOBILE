@@ -117,21 +117,36 @@ object RobotWifiConnector {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return false
 
-        val robotNetwork = manager.allNetworks.firstOrNull { network ->
-            val capabilities = manager.getNetworkCapabilities(network)
-            if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
-                return@firstOrNull false
-            }
-            val wifiInfo = capabilities.transportInfo as? android.net.wifi.WifiInfo
-            val ssid = wifiInfo?.ssid.orEmpty().removePrefix("\"").removeSuffix("\"")
+        val requestedRobotNetwork = activeNetwork?.takeIf { network ->
+            val ssid = networkSsid(manager, network)
             RobotBranding.isRobotWifiSsid(ssid)
-        } ?: return false
+        }
+        if (requestedRobotNetwork != null) {
+            return try {
+                activeManager = manager
+                manager.bindProcessToNetwork(requestedRobotNetwork)
+                Log.w(LOG_TAG, "bindToCurrentRobotWifi reused requested network $requestedRobotNetwork")
+                true
+            } catch (exc: Exception) {
+                Log.w(LOG_TAG, "bindToCurrentRobotWifi reuse failed: ${exc.message}")
+                release()
+                false
+            }
+        }
+
+        val robotNetwork = findRobotWifiNetwork(manager) ?: return false
+
+        val shouldReleaseStaleRequest = activeCallback != null && activeNetwork != null && activeNetwork != robotNetwork
+        if (shouldReleaseStaleRequest) {
+            Log.w(LOG_TAG, "bindToCurrentRobotWifi releasing stale requested network $activeNetwork")
+            release()
+        }
 
         return try {
-            release()
             activeManager = manager
             activeNetwork = robotNetwork
             manager.bindProcessToNetwork(robotNetwork)
+            Log.w(LOG_TAG, "bindToCurrentRobotWifi bound to discovered robot network $robotNetwork")
             true
         } catch (exc: Exception) {
             Log.w(LOG_TAG, "bindToCurrentRobotWifi failed: ${exc.message}")
@@ -161,5 +176,20 @@ object RobotWifiConnector {
         activeNetwork?.let { return it }
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         return manager.activeNetwork
+    }
+
+    private fun findRobotWifiNetwork(manager: ConnectivityManager): Network? {
+        return manager.allNetworks.firstOrNull { network ->
+            RobotBranding.isRobotWifiSsid(networkSsid(manager, network))
+        }
+    }
+
+    private fun networkSsid(manager: ConnectivityManager, network: Network): String {
+        val capabilities = manager.getNetworkCapabilities(network)
+        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
+            return ""
+        }
+        val wifiInfo = capabilities.transportInfo as? android.net.wifi.WifiInfo
+        return wifiInfo?.ssid.orEmpty().removePrefix("\"").removeSuffix("\"")
     }
 }
