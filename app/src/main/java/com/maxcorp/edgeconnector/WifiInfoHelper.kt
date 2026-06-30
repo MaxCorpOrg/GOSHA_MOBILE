@@ -113,6 +113,12 @@ object WifiInfoHelper {
     fun nearbySsidByPrefixAnyAge(context: Context, prefix: String): String =
         nearbySsidByPrefixesAnyAge(context, listOf(prefix))
 
+    fun currentWifiNetwork(context: Context): Network? {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return null
+        return findWifiNetwork(manager)
+    }
+
     @Suppress("DEPRECATION")
     @SuppressLint("MissingPermission")
     fun requestFreshScanIfPossible(context: Context): Boolean {

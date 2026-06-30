@@ -83,6 +83,7 @@ class RobotConnectivityResolverTest {
         transportState = "reachable",
         target = "",
         localHost = localHost,
+        localHostHint = localHost,
         connectivityEvidence = "",
         verifiedNow = false,
         freshDeviceContact = false,

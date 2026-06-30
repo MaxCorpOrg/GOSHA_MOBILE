@@ -47,6 +47,7 @@
     <string name="diagnostics_local_robot_wifi_hidden">сеть робота GOSHA рядом не видна</string>
     <string name="diagnostics_local_permission_required">нужны права Android на поиск Wi‑Fi, чтобы увидеть сеть робота GOSHA</string>
     <string name="diagnostics_local_wait_home_wifi">жду возврат телефона в домашний Wi‑Fi</string>
+    <string name="diagnostics_local_vpn_active">на телефоне активен VPN; локальная проверка робота из приложения сейчас заблокирована</string>
     <string name="diagnostics_local_settling">робот применяет Wi‑Fi и перезапускает локальные сервисы</string>
     <string name="diagnostics_panel_skipped_robot_wifi">панель не проверялась: телефон в сети робота</string>
     <string name="diagnostics_panel_skipped_robot_visible">панель не проверялась: рядом видна сеть робота %1$s</string>
@@ -137,6 +138,12 @@
     <string name="wifi_continue_on_robot_network">Телефон уже подключен к сети робота. Продолжите подключение.</string>
     <string name="wifi_robot_visible_nearby">Вижу рядом сеть робота %1$s. Нажмите «Подключить робота», чтобы открыть подключение.</string>
     <string name="wifi_reconnect_hint">Можно подключить робота заново и выбрать новую сеть Wi‑Fi.</string>
+    <string name="wifi_reconnect_status_checking">Проверяю, где сейчас робот: в домашней сети, в своей сети GOSHA или вне сети.</string>
+    <string name="wifi_reconnect_status_found">Робот уже в вашей сети. Можно вернуться в меню или подключить его к новому Wi‑Fi.</string>
+    <string name="wifi_reconnect_status_platform_only">Робот уже вышел на связь с платформой. Локальный адрес ещё уточняется. Можно вернуться в меню или подключить новую сеть.</string>
+    <string name="wifi_reconnect_status_not_found">Робот сейчас не найден. Если хотите подключить его заново, переведите его в режим Wi‑Fi и нажмите «Подключить робота».</string>
+    <string name="wifi_reconnect_status_no_home_wifi">Телефон не в домашнем Wi‑Fi. Подключите его к своей сети, чтобы быстро проверить состояние робота.</string>
+    <string name="wifi_reconnect_status_vpn_active">На телефоне активен VPN. Пока он включён, приложение может не видеть робота в домашней сети. Временно выключите VPN и нажмите «Обновить».</string>
     <string name="wifi_connect_timeout_retry">Не получилось быстро открыть сеть робота. Если робот уже подключился к домашнему Wi‑Fi, приложение сейчас покажет главное меню. Если нет, попробуйте нажать кнопку еще раз.</string>
     <string name="wifi_reconnect_wait_mode">Робот пока не вошел в режим настройки Wi‑Fi. Сначала переведите его в режим подключения, чтобы рядом появилась сеть GOSHA-...</string>
     <string name="wifi_reconnect_status">Открыт шаг повторного подключения робота</string>
@@ -169,6 +176,15 @@
     <string name="menu_button_reset">Подготовить для нового робота</string>
     <string name="status_prefix">Статус: %1$s</string>
     <string name="status_connected_default">Устройство подключено и готово к работе</string>
+    <string name="menu_status_checking">Проверяю, подключён ли робот и доступен ли он в вашей сети...</string>
+    <string name="menu_status_checking_saved_host">Проверяю, отвечает ли робот по адресу %1$s...</string>
+    <string name="menu_status_no_home_wifi">Телефон не подключён к домашнему Wi‑Fi. Подключите Wi‑Fi и повторите проверку робота.</string>
+    <string name="menu_status_phone_on_robot_wifi">Телефон сейчас в сети робота %1$s. Можно сразу открыть подключение и выбрать новый Wi‑Fi.</string>
+    <string name="menu_status_robot_visible">Рядом видна сеть робота %1$s. Робот не в домашней сети: можно подключить его заново.</string>
+    <string name="menu_status_connected_host">Робот в сети и готов к работе. Локальный адрес: %1$s.</string>
+    <string name="menu_status_platform_only">Робот уже вышел на связь. Ищу его локальный адрес в домашней сети...</string>
+    <string name="menu_status_robot_missing">Робот сейчас не найден в домашней сети. Если он включён, подождите немного или подключите его к новому Wi‑Fi.</string>
+    <string name="menu_status_vpn_active">На телефоне активен VPN. Из‑за этого приложение сейчас не может проверить локальный адрес робота в домашней сети. Временно выключите VPN и повторите проверку.</string>
 
     <string name="button_next">Далее</string>
     <string name="button_back">Назад</string>

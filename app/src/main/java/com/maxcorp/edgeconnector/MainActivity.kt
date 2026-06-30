@@ -23,7 +23,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.textfield.TextInputEditText
+import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +33,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -103,7 +106,10 @@ class MainActivity : AppCompatActivity() {
     private var robotProvisionCheckJob: Job? = null
     private var robotWifiConnectTimeoutJob: Job? = null
     private var resumeDiscoveryJob: Job? = null
+    private var wifiStepStatusJob: Job? = null
     private var menuStabilizationJob: Job? = null
+    private var menuStabilizationRunning = false
+    private var queuedMenuStabilizationReason = ""
     private var wifiWatcherJob: Job? = null
     private var startupResolutionPending = true
     private var wifiBackToMenuMode = false
@@ -123,6 +129,11 @@ class MainActivity : AppCompatActivity() {
     private var pendingRobotWifiPermissionPurpose: PermissionRequestPurpose? = null
 
     private lateinit var robotWifiPermissionsLauncher: ActivityResultLauncher<Array<String>>
+
+    private data class ReachabilityCheckResult(
+        val panelSnapshot: RobotRuntimeSnapshot?,
+        val localHost: String?,
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -187,13 +198,19 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+        if (!awaitingRobotProvision && currentStep == WizardStep.WIFI && wifiBackToMenuMode) {
+            refreshWifiReconnectStatus(forceScan = false)
+        }
         if (!awaitingRobotProvision && currentStep == WizardStep.MENU && configStore.loadDraft().setupCompleted) {
+            applyImmediateMenuHint()
             scheduleMenuStabilization(reason = "resume")
         }
     }
 
     override fun onPause() {
-        menuStabilizationJob?.cancel()
+        cancelMenuStabilization()
+        wifiStepStatusJob?.cancel()
+        wifiStepStatusJob = null
         wifiWatcherJob?.cancel()
         wifiWatcherJob = null
         super.onPause()
@@ -203,7 +220,8 @@ class MainActivity : AppCompatActivity() {
         robotProvisionCheckJob?.cancel()
         robotWifiConnectTimeoutJob?.cancel()
         resumeDiscoveryJob?.cancel()
-        menuStabilizationJob?.cancel()
+        wifiStepStatusJob?.cancel()
+        cancelMenuStabilization()
         wifiWatcherJob?.cancel()
         loadingAnimator?.cancel()
         loadingGlowAnimator?.cancel()
@@ -427,37 +445,45 @@ class MainActivity : AppCompatActivity() {
         val current = configStore.loadDraft()
         val mobileProfile = bundle?.mobileProfile
         val selfhostBundle = bundle?.selfhostXiaozhi
+        val resolvedCode = bundle?.code?.takeIf { it.isNotBlank() }
+            ?: etCode.text?.toString()?.trim().orEmpty().ifBlank { current.onboardingCode }
+        val resolvedCloudEndpoint = bundle?.cloudEndpoint?.takeIf { it.isNotBlank() } ?: current.cloudEndpoint
+        val cloudEndpointParts = parseCloudEndpoint(resolvedCloudEndpoint)
         val panelUrl = mobileProfile?.panelUrl?.takeIf { it.isNotBlank() }
             ?: bundle?.panelUrl?.takeIf { it.isNotBlank() }
             ?: current.panelBaseUrl
         val hubBaseUrl = mobileProfile?.mcpEndpointBase?.takeIf { it.isNotBlank() }
             ?: selfhostBundle?.mcpEndpointBase?.takeIf { it.isNotBlank() }
-            ?: bundle?.cloudEndpoint?.takeIf { it.isNotBlank() }
+            ?: cloudEndpointParts.hubBaseUrl.takeIf { it.isNotBlank() }
             ?: current.hubBaseUrl
         val robotWifiPrefixes = mobileProfile?.robotWifiPrefixes
             ?.filter { it.isNotBlank() }
             ?.joinToString(",")
             ?.ifBlank { current.robotWifiPrefixesCsv }
             ?: current.robotWifiPrefixesCsv
+        val resolvedRobotId = bundle?.robotId?.takeIf { it.isNotBlank() }
+            ?: cloudEndpointParts.robotId.takeIf { it.isNotBlank() }
+            ?: current.robotId
         val merged = current.copy(
             panelBaseUrl = panelUrl,
             hubBaseUrl = hubBaseUrl,
             panelClientToken = bundle?.panelClientToken?.takeIf { it.isNotBlank() } ?: current.panelClientToken,
-            robotId = bundle?.robotId ?: current.robotId,
-            robotName = bundle?.robotName ?: current.robotName,
-            cloudEndpoint = bundle?.cloudEndpoint ?: current.cloudEndpoint,
-            planCode = bundle?.planCode ?: current.planCode,
-            planName = bundle?.planName ?: current.planName,
-            billingStart = bundle?.billingStart ?: current.billingStart,
-            billingEnd = bundle?.billingEnd ?: current.billingEnd,
-            paymentStatus = bundle?.paymentStatus ?: current.paymentStatus,
+            robotId = resolvedRobotId,
+            robotName = bundle?.robotName?.takeIf { it.isNotBlank() } ?: current.robotName,
+            token = cloudEndpointParts.token.takeIf { it.isNotBlank() } ?: current.token,
+            cloudEndpoint = resolvedCloudEndpoint,
+            planCode = bundle?.planCode?.takeIf { it.isNotBlank() } ?: current.planCode,
+            planName = bundle?.planName?.takeIf { it.isNotBlank() } ?: current.planName,
+            billingStart = bundle?.billingStart?.takeIf { it.isNotBlank() } ?: current.billingStart,
+            billingEnd = bundle?.billingEnd?.takeIf { it.isNotBlank() } ?: current.billingEnd,
+            paymentStatus = bundle?.paymentStatus?.takeIf { it.isNotBlank() } ?: current.paymentStatus,
             ownerName = bundle?.ownerName?.takeIf { it.isNotBlank() } ?: etOwnerName.text?.toString()?.trim().orEmpty(),
             ownerEmail = bundle?.ownerEmail?.takeIf { it.isNotBlank() } ?: etOwnerEmail.text?.toString()?.trim().orEmpty(),
             ownerPhone = bundle?.ownerPhone?.takeIf { it.isNotBlank() } ?: etOwnerPhone.text?.toString()?.trim().orEmpty(),
             clientCompany = bundle?.ownerCompany ?: current.clientCompany,
             clientContact = bundle?.ownerContact ?: current.clientContact,
             clientComment = bundle?.ownerComment ?: current.clientComment,
-            onboardingCode = etCode.text?.toString()?.trim().orEmpty(),
+            onboardingCode = resolvedCode,
             robotHost = discoveredHost ?: current.robotHost,
             robotPort = 8080,
             robotPath = "/ws",
@@ -938,9 +964,19 @@ class MainActivity : AppCompatActivity() {
             currentStep == WizardStep.MENU &&
             draft.setupCompleted
         ) {
+            applyImmediateMenuHint(draft)
             scheduleMenuStabilization(
                 reason = if (fromWatcher) "wifi_change" else "resume_change"
             )
+        }
+
+        if (
+            !awaitingRobotProvision &&
+            currentStep == WizardStep.WIFI &&
+            wifiBackToMenuMode &&
+            draft.setupCompleted
+        ) {
+            refreshWifiReconnectStatus(forceScan = false)
         }
     }
 
@@ -1041,10 +1077,18 @@ class MainActivity : AppCompatActivity() {
         subnetPrefix: String,
         preferredHosts: List<String> = emptyList(),
     ): Pair<String?, String> {
+        Log.d(
+            logTag,
+            "discoverRobotLocally(subnet=$subnetPrefix, preferred=${preferredHosts.filter { it.isNotBlank() }})"
+        )
         val result = LocalRobotDiscovery.discover(
-            http = httpClient,
+            http = WifiBoundHttp.forCurrentWifi(this, httpClient),
             subnetPrefix = subnetPrefix,
             preferredHosts = preferredHosts
+        )
+        Log.d(
+            logTag,
+            "discoverRobotLocally result host=${result.first.orEmpty()} detail=${result.second}"
         )
         updateLocalDiagnostics(
             if (!result.first.isNullOrBlank()) {
@@ -1056,7 +1100,226 @@ class MainActivity : AppCompatActivity() {
         return result
     }
 
+    private fun cancelMenuStabilization() {
+        menuStabilizationJob?.cancel()
+        menuStabilizationJob = null
+        menuStabilizationRunning = false
+        queuedMenuStabilizationReason = ""
+    }
+
+    private fun preferredDiscoveryHosts(
+        draft: OnboardingDraft = configStore.loadDraft(),
+        extraHosts: List<String> = emptyList(),
+    ): List<String> {
+        return buildList {
+            add(draft.robotHost)
+            addAll(extraHosts)
+        }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    private fun applyImmediateMenuHint(draft: OnboardingDraft = configStore.loadDraft()) {
+        if (currentStep != WizardStep.MENU || awaitingRobotProvision || !draft.setupCompleted) {
+            return
+        }
+
+        val currentSsid = WifiInfoHelper.currentSsid(this)
+        val visibleRobotSsid = currentVisibleRobotSsid(maxAgeMs = 8_000L)
+        val vpnActive = NetworkStateHelper.isVpnActive(this)
+        val message = when {
+            RobotBranding.isRobotWifiSsid(currentSsid, robotWifiPrefix) ->
+                getString(R.string.menu_status_phone_on_robot_wifi, currentSsid)
+
+            visibleRobotSsid.isNotBlank() ->
+                getString(R.string.menu_status_robot_visible, visibleRobotSsid)
+
+            WifiInfoHelper.currentSubnetPrefix(this).isBlank() ->
+                getString(R.string.menu_status_no_home_wifi)
+
+            vpnActive ->
+                getString(R.string.menu_status_vpn_active)
+
+            draft.robotHost.isNotBlank() ->
+                getString(R.string.menu_status_checking_saved_host, draft.robotHost)
+
+            else ->
+                getString(R.string.menu_status_checking)
+        }
+        setStatus(message)
+    }
+
+    private suspend fun resolvePanelAndLocalReachability(
+        draft: OnboardingDraft,
+        subnetPrefix: String,
+    ): ReachabilityCheckResult = coroutineScope {
+        val panelDeferred = async { resolveRobotViaPanel() }
+        if (NetworkStateHelper.isVpnActive(this@MainActivity) || subnetPrefix.isBlank()) {
+            return@coroutineScope ReachabilityCheckResult(
+                panelSnapshot = panelDeferred.await(),
+                localHost = null,
+            )
+        }
+        val localDeferred = if (subnetPrefix.isNotBlank()) {
+            async {
+                val panelHostHint = withTimeoutOrNull(1_200L) {
+                    panelDeferred.await()?.localHostHint.orEmpty()
+                }.orEmpty()
+                discoverRobotLocally(
+                    subnetPrefix,
+                    preferredDiscoveryHosts(draft, listOf(panelHostHint)),
+                )
+            }
+        } else {
+            null
+        }
+
+        ReachabilityCheckResult(
+            panelSnapshot = panelDeferred.await(),
+            localHost = localDeferred?.await()?.first,
+        )
+    }
+
+    private fun applyConnectedWifiStepState(host: String) {
+        saveDraftLocally(discoveredHost = host)
+        val updatedDraft = configStore.loadDraft().copy(
+            wifiReconnectPending = false,
+            setupCompleted = true,
+        )
+        persistDraft(updatedDraft)
+        updateLocalDiagnostics(getString(R.string.diagnostics_local_found, host))
+        renderDiagnostics()
+        tvRobotCheck.text = getString(R.string.wifi_reconnect_status_found)
+        setStatus(getString(R.string.menu_status_connected_host, host))
+        reportPresenceAsync(MobilePresenceState.HOME_WIFI_LOCAL, localHost = host)
+        syncConnectorService(updatedDraft)
+    }
+
+    private fun applyPanelOnlyWifiStepState() {
+        val updatedDraft = configStore.loadDraft().copy(
+            robotHost = "",
+            wifiReconnectPending = false,
+            setupCompleted = true,
+        )
+        persistDraft(updatedDraft)
+        updateLocalDiagnostics(getString(R.string.diagnostics_local_platform_only))
+        diagnosticsPanel = getString(R.string.diagnostics_panel_connected_platform)
+        renderDiagnostics()
+        tvRobotCheck.text = getString(R.string.wifi_reconnect_status_platform_only)
+        setStatus(getString(R.string.menu_status_platform_only))
+        stopConnectorService()
+    }
+
+    private fun refreshWifiReconnectStatus(forceScan: Boolean = true) {
+        val draft = configStore.loadDraft()
+        if (!wifiBackToMenuMode || draft.robotId.isBlank() || awaitingRobotProvision || pendingRobotWifiConnection) {
+            return
+        }
+
+        wifiStepStatusJob?.cancel()
+        tvRobotCheck.text = getString(R.string.wifi_reconnect_status_checking)
+        setStatus(getString(R.string.menu_status_checking))
+
+        wifiStepStatusJob = uiScope.launch {
+            val currentSsid = WifiInfoHelper.currentSsid(this@MainActivity)
+            if (RobotBranding.isRobotWifiSsid(currentSsid, robotWifiPrefix)) {
+                updateLocalDiagnostics(getString(R.string.diagnostics_local_wait_robot_wifi, currentSsid))
+                diagnosticsPanel = getString(R.string.diagnostics_panel_skipped_robot_wifi)
+                renderDiagnostics()
+                tvRobotCheck.text = getString(R.string.wifi_continue_on_robot_network)
+                setStatus(getString(R.string.menu_status_phone_on_robot_wifi, currentSsid))
+                reportPresenceAsync(MobilePresenceState.PHONE_ON_ROBOT_WIFI)
+                return@launch
+            }
+
+            val visibleRobotSsid = currentVisibleRobotSsid(maxAgeMs = 8_000L)
+            if (visibleRobotSsid.isNotBlank()) {
+                updateLocalDiagnostics(getString(R.string.diagnostics_local_robot_visible_nearby, visibleRobotSsid))
+                diagnosticsPanel = getString(R.string.diagnostics_panel_skipped_robot_visible, visibleRobotSsid)
+                renderDiagnostics()
+                tvRobotCheck.text = getString(R.string.wifi_robot_visible_nearby, visibleRobotSsid)
+                setStatus(getString(R.string.menu_status_robot_visible, visibleRobotSsid))
+                reportPresenceAsync(MobilePresenceState.ROBOT_HOTSPOT_VISIBLE)
+                return@launch
+            }
+
+            if (forceScan) {
+                maybeRequestFreshRobotScan(force = true)
+            }
+
+            val subnetPrefix = WifiInfoHelper.currentSubnetPrefix(this@MainActivity)
+        if (subnetPrefix.isBlank()) {
+            updateLocalDiagnostics(getString(R.string.diagnostics_local_wait_home_wifi))
+            diagnosticsPanel = getString(R.string.diagnostics_panel_skipped_no_internet)
+            renderDiagnostics()
+            tvRobotCheck.text = getString(R.string.wifi_reconnect_status_no_home_wifi)
+            setStatus(getString(R.string.menu_status_no_home_wifi))
+            return@launch
+        }
+
+        val reachability = resolvePanelAndLocalReachability(draft, subnetPrefix)
+            val panelDecision = RobotConnectivityResolver.resolve(
+                panelSnapshot = reachability.panelSnapshot,
+                robotWifiPrefix = robotWifiPrefix,
+            )
+            when (panelDecision.type) {
+                RobotConnectivityDecisionType.CONNECTED_LOCALLY -> {
+                    val host = panelDecision.localHost.ifBlank { reachability.localHost.orEmpty() }
+                    if (host.isNotBlank()) {
+                        applyConnectedWifiStepState(host)
+                        return@launch
+                    }
+                }
+
+                RobotConnectivityDecisionType.CONNECTED_VIA_PANEL -> {
+                    applyPanelOnlyWifiStepState()
+                    return@launch
+                }
+
+                else -> Unit
+            }
+
+            if (!reachability.localHost.isNullOrBlank()) {
+                applyConnectedWifiStepState(reachability.localHost)
+                return@launch
+            }
+
+            if (NetworkStateHelper.isVpnActive(this@MainActivity)) {
+                updateLocalDiagnostics(getString(R.string.diagnostics_local_vpn_active))
+                diagnosticsPanel = getString(R.string.diagnostics_panel_connected_platform)
+                renderDiagnostics()
+                tvRobotCheck.text = getString(R.string.wifi_reconnect_status_vpn_active)
+                setStatus(getString(R.string.menu_status_vpn_active))
+                reportPresenceAsync(MobilePresenceState.NOT_FOUND)
+                return@launch
+            }
+
+            val refreshedVisibleRobotSsid = findVisibleRobotSsid(attempts = 1, delayMs = 0L)
+            if (refreshedVisibleRobotSsid.isNotBlank()) {
+                updateLocalDiagnostics(
+                    getString(R.string.diagnostics_local_robot_visible_nearby, refreshedVisibleRobotSsid)
+                )
+                diagnosticsPanel = getString(
+                    R.string.diagnostics_panel_skipped_robot_visible,
+                    refreshedVisibleRobotSsid
+                )
+                renderDiagnostics()
+                tvRobotCheck.text = getString(R.string.wifi_robot_visible_nearby, refreshedVisibleRobotSsid)
+                setStatus(getString(R.string.menu_status_robot_visible, refreshedVisibleRobotSsid))
+                reportPresenceAsync(MobilePresenceState.ROBOT_HOTSPOT_VISIBLE)
+                return@launch
+            }
+
+            tvRobotCheck.text = getString(R.string.wifi_reconnect_status_not_found)
+            setStatus(getString(R.string.menu_status_robot_missing))
+            reportPresenceAsync(MobilePresenceState.NOT_FOUND)
+        }
+    }
+
     private fun provisionRobotToWifi() {
+        wifiStepStatusJob?.cancel()
+        wifiStepStatusJob = null
         if (NetworkStateHelper.isVpnActive(this)) {
             tvRobotCheck.text = getString(R.string.wifi_vpn_enabled_text)
             setStatus(getString(R.string.wifi_vpn_enabled_status))
@@ -1100,7 +1363,7 @@ class MainActivity : AppCompatActivity() {
         setStatus(getString(R.string.runtime_status_searching_robot_wifi))
         resumeDiscoveryJob = uiScope.launch {
             val draft = configStore.loadDraft()
-            val visibleRobotSsid = findVisibleRobotSsid()
+            val visibleRobotSsid = findVisibleRobotSsid(attempts = 2, delayMs = 650L)
             if (visibleRobotSsid.isNotBlank()) {
                 updateLocalDiagnostics(getString(R.string.diagnostics_local_robot_visible_nearby, visibleRobotSsid))
                 diagnosticsPanel = getString(R.string.diagnostics_panel_skipped_robot_visible, visibleRobotSsid)
@@ -1115,14 +1378,14 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
 
-            if (maybeHandleRobotViaPanel(resolveRobotViaPanel(), getString(R.string.wifi_robot_already_connected_panel))) {
+            val reachability = resolvePanelAndLocalReachability(draft, subnetPrefix)
+            if (maybeHandleRobotViaPanel(reachability.panelSnapshot, getString(R.string.wifi_robot_already_connected_panel))) {
                 return@launch
             }
 
-            val (host, _) = discoverRobotLocally(subnetPrefix, listOf(draft.robotHost))
-            if (!host.isNullOrBlank()) {
+            if (!reachability.localHost.isNullOrBlank()) {
                 maybeHandleRobotFound(
-                    host = host,
+                    host = reachability.localHost,
                     statusText = getString(R.string.wifi_robot_found_network),
                     toastText = getString(R.string.wifi_robot_found_toast),
                 )
@@ -1136,7 +1399,9 @@ class MainActivity : AppCompatActivity() {
         awaitingRobotProvision = false
         pendingRobotWifiConnection = false
         robotWifiConnectTimeoutJob?.cancel()
-        menuStabilizationJob?.cancel()
+        wifiStepStatusJob?.cancel()
+        wifiStepStatusJob = null
+        cancelMenuStabilization()
         wifiBackToMenuMode = false
         saveDraftLocally(discoveredHost = host)
         val updatedDraft = configStore.loadDraft().copy(
@@ -1146,7 +1411,7 @@ class MainActivity : AppCompatActivity() {
         persistDraft(updatedDraft)
         tvRobotCheck.text = statusText
         tvSuccessMessage.text = getString(R.string.wifi_robot_found_success)
-        showMenuWithStatus(getString(R.string.runtime_status_robot_found))
+        showMenuWithStatus(getString(R.string.menu_status_connected_host, host))
         reportPresenceAsync(MobilePresenceState.HOME_WIFI_LOCAL, localHost = host)
         syncConnectorService(updatedDraft)
         toastText?.let(::toast)
@@ -1156,7 +1421,9 @@ class MainActivity : AppCompatActivity() {
         awaitingRobotProvision = false
         pendingRobotWifiConnection = false
         robotWifiConnectTimeoutJob?.cancel()
-        menuStabilizationJob?.cancel()
+        wifiStepStatusJob?.cancel()
+        wifiStepStatusJob = null
+        cancelMenuStabilization()
         persistDraft(configStore.loadDraft().copy(robotHost = ""))
         wifiBackToMenuMode = configStore.loadDraft().robotId.isNotBlank()
         tvInstruction.text = getString(
@@ -1321,7 +1588,7 @@ class MainActivity : AppCompatActivity() {
                 awaitingRobotProvision = false
                 pendingRobotWifiConnection = false
                 robotWifiConnectTimeoutJob?.cancel()
-                menuStabilizationJob?.cancel()
+                cancelMenuStabilization()
                 wifiBackToMenuMode = false
                 val updatedDraft = configStore.loadDraft().copy(
                     robotHost = "",
@@ -1334,7 +1601,7 @@ class MainActivity : AppCompatActivity() {
                 updateLocalDiagnostics(getString(R.string.diagnostics_local_platform_only))
                 diagnosticsPanel = getString(R.string.diagnostics_panel_connected_platform)
                 renderDiagnostics()
-                showMenuWithStatus(getString(R.string.runtime_status_address_pending))
+                showMenuWithStatus(getString(R.string.menu_status_platform_only))
                 stopConnectorService()
                 toastText?.let(::toast)
                 true
@@ -1359,6 +1626,7 @@ class MainActivity : AppCompatActivity() {
         renderDiagnostics()
         setStatus(getString(R.string.runtime_status_reconnect_open))
         stopConnectorService()
+        refreshWifiReconnectStatus()
     }
 
     private suspend fun findVisibleRobotSsid(attempts: Int = 3, delayMs: Long = 1200L): String {
@@ -1392,8 +1660,8 @@ class MainActivity : AppCompatActivity() {
         setStatus(getString(R.string.runtime_status_searching))
 
         robotProvisionCheckJob = uiScope.launch {
-            val totalAttempts = 32
-            val settleAttempts = 6
+            val totalAttempts = 24
+            val settleAttempts = 3
             repeat(totalAttempts) { index ->
                 val currentSsid = WifiInfoHelper.currentSsid(this@MainActivity)
                 val subnetPrefix = WifiInfoHelper.currentSubnetPrefix(this@MainActivity)
@@ -1429,7 +1697,7 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             updateProvisionProgress(getString(R.string.wifi_wait_robot_switch))
                         }
-                        delay(2000)
+                        delay(1200)
                         return@repeat
                     }
 
@@ -1443,7 +1711,7 @@ class MainActivity : AppCompatActivity() {
                         diagnosticsPanel = getString(R.string.diagnostics_panel_skipped_no_internet)
                         renderDiagnostics()
                         updateProvisionProgress(getString(R.string.wifi_wait_phone_return))
-                        delay(2000)
+                        delay(1200)
                         return@repeat
                     }
 
@@ -1478,7 +1746,7 @@ class MainActivity : AppCompatActivity() {
                                 getString(R.string.wifi_wait_robot_boot)
                             }
                         )
-                        delay(3000)
+                        delay(1500)
                         return@repeat
                     }
 
@@ -1505,7 +1773,7 @@ class MainActivity : AppCompatActivity() {
                         ) {
                             return@launch
                         }
-                        delay(2500)
+                        delay(1200)
                     }
                 }
             }
@@ -1633,7 +1901,9 @@ class MainActivity : AppCompatActivity() {
         awaitingRobotProvision = true
         pendingRobotWifiConnection = false
         robotWifiConnectTimeoutJob?.cancel()
-        menuStabilizationJob?.cancel()
+        wifiStepStatusJob?.cancel()
+        wifiStepStatusJob = null
+        cancelMenuStabilization()
         pendingRobotWifiSsidHint = ""
         robotProvisionCheckJob?.cancel()
         resumeDiscoveryJob?.cancel()
@@ -1673,15 +1943,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (draft.setupCompleted) {
-            showMenuWithStatus(
-                if (draft.robotHost.isBlank()) {
-                    getString(R.string.runtime_status_address_pending)
-                } else {
-                    getString(R.string.runtime_status_menu)
-                }
-            )
+            showStep(WizardStep.MENU)
+            applyImmediateMenuHint(draft)
             syncConnectorService(draft)
-            scheduleMenuStabilization(reason = "restore", delayMs = 400L)
+            scheduleMenuStabilization(reason = "restore", delayMs = 250L)
             return
         }
 
@@ -1712,9 +1977,8 @@ class MainActivity : AppCompatActivity() {
             )
 
             maybeRequestFreshRobotScan(force = true)
-            delay(1500L)
             val visibleRobotSsid = currentVisibleRobotSsid().ifBlank {
-                findVisibleRobotSsid(attempts = 3, delayMs = 1200L)
+                findVisibleRobotSsid(attempts = 2, delayMs = 650L)
             }
             val refreshedCurrentSsid = WifiInfoHelper.currentSsid(this@MainActivity)
             val visibilityDecision = visibleRobotDecision(refreshedCurrentSsid, visibleRobotSsid)
@@ -1727,25 +1991,42 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
 
-            if (maybeHandleRobotViaPanel(resolveRobotViaPanel(), getString(R.string.wifi_robot_already_connected_panel))) {
+            val subnetPrefix = WifiInfoHelper.currentSubnetPrefix(this@MainActivity)
+            val reachability = resolvePanelAndLocalReachability(draft, subnetPrefix)
+            if (maybeHandleRobotViaPanel(reachability.panelSnapshot, getString(R.string.wifi_robot_already_connected_panel))) {
                 return@launch
             }
 
-            val subnetPrefix = WifiInfoHelper.currentSubnetPrefix(this@MainActivity)
-            if (subnetPrefix.isNotBlank()) {
+            if (!reachability.localHost.isNullOrBlank()) {
                 tvLoadingBody.text = getString(R.string.loading_body_check)
-                val (host, _) = discoverRobotLocally(subnetPrefix, listOf(draft.robotHost))
-                if (!host.isNullOrBlank()) {
-                    maybeHandleRobotFound(
-                        host = host,
-                        statusText = getString(R.string.wifi_robot_found_network),
-                        toastText = getString(R.string.wifi_robot_found_toast)
-                    )
-                    return@launch
-                }
+                maybeHandleRobotFound(
+                    host = reachability.localHost,
+                    statusText = getString(R.string.wifi_robot_found_network),
+                    toastText = getString(R.string.wifi_robot_found_toast)
+                )
+                return@launch
+            }
+
+            if (subnetPrefix.isNotBlank()) {
                 tvLoadingBody.text = getString(R.string.loading_body_search)
             } else {
                 tvLoadingBody.text = getString(R.string.loading_body_check)
+            }
+
+            if (subnetPrefix.isNotBlank()) {
+                val directVisibleRobotSsid = findVisibleRobotSsid(attempts = 1, delayMs = 0L)
+                if (directVisibleRobotSsid.isNotBlank()) {
+                    applyWifiStepTransition(
+                        OnboardingCoordinator.visibility(
+                            decision = visibleRobotDecision(refreshedCurrentSsid, directVisibleRobotSsid),
+                            presentation = WifiPresentationMode.OPEN_RECONNECT_STEP,
+                        ) ?: OnboardingCoordinator.reconnectWaiting()
+                    )
+                    return@launch
+                }
+            } else {
+                maybeHandleRobotMissing(getString(R.string.wifi_missing_open_hint))
+                return@launch
             }
 
             maybeHandleRobotMissing(getString(R.string.wifi_missing_open_hint))
@@ -1761,15 +2042,34 @@ class MainActivity : AppCompatActivity() {
         setStatus(statusText)
     }
 
-    private fun scheduleMenuStabilization(reason: String, delayMs: Long = 3_000L) {
-        menuStabilizationJob?.cancel()
+    private fun scheduleMenuStabilization(reason: String, delayMs: Long = 700L) {
         val draft = configStore.loadDraft()
         if (!draft.setupCompleted || draft.robotId.isBlank() || awaitingRobotProvision) {
             return
         }
+        if (menuStabilizationRunning) {
+            queuedMenuStabilizationReason = reason
+            Log.d(logTag, "scheduleMenuStabilization queued while running: $reason")
+            return
+        }
+        menuStabilizationJob?.cancel()
         menuStabilizationJob = uiScope.launch {
-            delay(delayMs)
-            runMenuStabilization(reason)
+            try {
+                delay(delayMs)
+                if (awaitingRobotProvision || currentStep != WizardStep.MENU) {
+                    return@launch
+                }
+                menuStabilizationRunning = true
+                runMenuStabilization(reason)
+            } finally {
+                menuStabilizationRunning = false
+                menuStabilizationJob = null
+                val queuedReason = queuedMenuStabilizationReason
+                queuedMenuStabilizationReason = ""
+                if (queuedReason.isNotBlank()) {
+                    scheduleMenuStabilization(queuedReason, delayMs = 500L)
+                }
+            }
         }
     }
 
@@ -1781,6 +2081,7 @@ class MainActivity : AppCompatActivity() {
 
         Log.d(logTag, "runMenuStabilization(reason=$reason, robotId=${draft.robotId})")
         maybeRequestFreshRobotScan(force = reason == "restore")
+        applyImmediateMenuHint(draft)
 
         val currentSsid = WifiInfoHelper.currentSsid(this@MainActivity)
         val visibleRobotSsid = currentVisibleRobotSsid()
@@ -1790,7 +2091,7 @@ class MainActivity : AppCompatActivity() {
                 updateLocalDiagnostics(getString(R.string.diagnostics_local_wait_robot_wifi, visibilityDecision.robotSsid))
                 diagnosticsPanel = getString(R.string.diagnostics_panel_skipped_robot_wifi)
                 renderDiagnostics()
-                setStatus(getString(R.string.runtime_status_address_pending))
+                setStatus(getString(R.string.menu_status_phone_on_robot_wifi, visibilityDecision.robotSsid))
                 reportPresenceAsync(MobilePresenceState.PHONE_ON_ROBOT_WIFI)
             }
 
@@ -1803,16 +2104,17 @@ class MainActivity : AppCompatActivity() {
                     visibilityDecision.robotSsid
                 )
                 renderDiagnostics()
-                setStatus(getString(R.string.runtime_status_address_pending))
+                setStatus(getString(R.string.menu_status_robot_visible, visibilityDecision.robotSsid))
                 reportPresenceAsync(MobilePresenceState.ROBOT_HOTSPOT_VISIBLE)
             }
 
             else -> Unit
         }
 
-        val snapshot = resolveRobotViaPanel()
+        val subnetPrefix = WifiInfoHelper.currentSubnetPrefix(this@MainActivity)
+        val reachability = resolvePanelAndLocalReachability(draft, subnetPrefix)
         val panelDecision = RobotConnectivityResolver.resolve(
-            panelSnapshot = snapshot,
+            panelSnapshot = reachability.panelSnapshot,
             robotWifiPrefix = robotWifiPrefix,
         )
         val connectedTransition = OnboardingCoordinator.connectedMenu(panelDecision)
@@ -1834,23 +2136,31 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        val subnetPrefix = WifiInfoHelper.currentSubnetPrefix(this@MainActivity)
-        if (subnetPrefix.isNotBlank()) {
-            val (host, _) = discoverRobotLocally(subnetPrefix, listOf(configStore.loadDraft().robotHost))
-            if (!host.isNullOrBlank()) {
-                maybeHandleRobotFound(
-                    host = host,
-                    statusText = getString(R.string.wifi_robot_found_network),
-                    toastText = null,
-                )
-                return
-            }
+        if (!reachability.localHost.isNullOrBlank()) {
+            maybeHandleRobotFound(
+                host = reachability.localHost,
+                statusText = getString(R.string.wifi_robot_found_network),
+                toastText = null,
+            )
+            return
+        }
 
+        if (NetworkStateHelper.isVpnActive(this@MainActivity) && !panelOnlyConnected) {
+            persistDraft(configStore.loadDraft().copy(robotHost = ""))
+            updateLocalDiagnostics(getString(R.string.diagnostics_local_vpn_active))
+            renderDiagnostics()
+            setStatus(getString(R.string.menu_status_vpn_active))
+            reportPresenceAsync(MobilePresenceState.NOT_FOUND)
+            stopConnectorService()
+            return
+        }
+
+        if (subnetPrefix.isNotBlank()) {
             if (!panelOnlyConnected && visibilityDecision.type == RobotConnectivityDecisionType.UNKNOWN) {
                 persistDraft(configStore.loadDraft().copy(robotHost = ""))
                 updateLocalDiagnostics(getString(R.string.diagnostics_local_robot_wifi_hidden))
                 renderDiagnostics()
-                setStatus(getString(R.string.runtime_status_robot_missing))
+                setStatus(getString(R.string.menu_status_robot_missing))
                 reportPresenceAsync(MobilePresenceState.NOT_FOUND)
                 stopConnectorService()
                 return
@@ -1859,7 +2169,7 @@ class MainActivity : AppCompatActivity() {
             updateLocalDiagnostics(getString(R.string.diagnostics_local_wait_home_wifi))
             diagnosticsPanel = getString(R.string.diagnostics_panel_skipped_no_internet)
             renderDiagnostics()
-            setStatus(getString(R.string.runtime_status_address_pending))
+            setStatus(getString(R.string.menu_status_no_home_wifi))
             stopConnectorService()
             return
         }
@@ -1899,6 +2209,10 @@ class MainActivity : AppCompatActivity() {
                     onboardingCode = draft.onboardingCode,
                 )
                 lastPresenceSignature = signature
+                Log.d(
+                    logTag,
+                    "reportPresenceAsync success: state=${state.wireValue} localHost=$normalizedHost"
+                )
             } catch (exc: Exception) {
                 Log.w(logTag, "reportPresenceAsync failed: ${exc.message}")
             }
@@ -1967,7 +2281,9 @@ class MainActivity : AppCompatActivity() {
         robotWifiConnectTimeoutJob?.cancel()
         robotProvisionCheckJob?.cancel()
         resumeDiscoveryJob?.cancel()
-        menuStabilizationJob?.cancel()
+        wifiStepStatusJob?.cancel()
+        wifiStepStatusJob = null
+        cancelMenuStabilization()
         wifiBackToMenuMode = true
         openWifiReconnectStep(
             message = getString(R.string.wifi_reconnect_hint),
@@ -1993,7 +2309,9 @@ class MainActivity : AppCompatActivity() {
                 awaitingRobotProvision = false
                 pendingRobotWifiConnection = false
                 robotProvisionCheckJob?.cancel()
-                menuStabilizationJob?.cancel()
+                wifiStepStatusJob?.cancel()
+                wifiStepStatusJob = null
+                cancelMenuStabilization()
                 etCode.setText("")
                 etOwnerName.setText("")
                 etOwnerEmail.setText("")

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import org.json.JSONObject
 import java.net.URI
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 private const val PREFS = "gosha_mobile_prefs"
@@ -41,6 +42,12 @@ private const val K_PORTAL_URL = "portal_url"
 private const val K_MOBILE_WEBSOCKET_URL = "mobile_websocket_url"
 private const val K_PREFERRED_BACKEND_MODE = "preferred_backend_mode"
 private const val K_ROBOT_WIFI_PREFIXES = "robot_wifi_prefixes"
+private const val K_CONNECTOR_HUB_URL = "connector_hub_url"
+private const val K_CONNECTOR_ROBOT_ID = "connector_robot_id"
+private const val K_CONNECTOR_TOKEN = "connector_token"
+private const val K_CONNECTOR_ROBOT_HOST = "connector_robot_host"
+private const val K_CONNECTOR_ROBOT_PORT = "connector_robot_port"
+private const val K_CONNECTOR_ROBOT_PATH = "connector_robot_path"
 
 private const val CLIENT_NAME = "android-app"
 private const val CLIENT_VERSION = "0.1.0"
@@ -51,6 +58,51 @@ private fun sanitizeRobotHost(rawHost: String): String {
     if (normalized.isBlank()) return ""
     if (normalized == "localhost" || normalized == "0.0.0.0" || normalized.startsWith("127.")) return ""
     return host
+}
+
+data class CloudEndpointParts(
+    val hubBaseUrl: String = "",
+    val token: String = "",
+    val robotId: String = "",
+)
+
+internal fun parseCloudEndpoint(rawUrl: String): CloudEndpointParts {
+    val trimmed = rawUrl.trim()
+    if (trimmed.isBlank()) return CloudEndpointParts()
+
+    return try {
+        val uri = URI(trimmed)
+        val hubBaseUrl = URI(
+            uri.scheme,
+            uri.userInfo,
+            uri.host,
+            uri.port,
+            uri.path,
+            null,
+            null,
+        ).toString()
+        val query = uri.rawQuery.orEmpty()
+        val params = query
+            .split('&')
+            .mapNotNull { item ->
+                if (item.isBlank()) {
+                    null
+                } else {
+                    val key = item.substringBefore('=')
+                    val value = item.substringAfter('=', "")
+                    URLDecoder.decode(key, Charsets.UTF_8.name()) to
+                        URLDecoder.decode(value, Charsets.UTF_8.name())
+                }
+            }
+            .toMap()
+        CloudEndpointParts(
+            hubBaseUrl = hubBaseUrl.ifBlank { trimmed.substringBefore('?') },
+            token = params["token"].orEmpty(),
+            robotId = params["robot_id"].orEmpty(),
+        )
+    } catch (_: Exception) {
+        CloudEndpointParts(hubBaseUrl = trimmed.substringBefore('?'))
+    }
 }
 
 data class ConnectorConfig(
@@ -130,12 +182,27 @@ class ConfigStore(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun loadConfig(): ConnectorConfig? {
-        val hub = prefs.getString(K_HUB_URL, "") ?: ""
-        val robotId = prefs.getString(K_ROBOT_ID, "") ?: ""
-        val token = prefs.getString(K_TOKEN, "") ?: ""
-        val host = sanitizeRobotHost(prefs.getString(K_ROBOT_HOST, "") ?: "")
-        val port = prefs.getInt(K_ROBOT_PORT, 8080)
-        val path = prefs.getString(K_ROBOT_PATH, "/ws") ?: "/ws"
+        val hub = prefs.getString(K_CONNECTOR_HUB_URL, "")?.ifBlank {
+            prefs.getString(K_HUB_URL, "") ?: ""
+        } ?: ""
+        val robotId = prefs.getString(K_CONNECTOR_ROBOT_ID, "")?.ifBlank {
+            prefs.getString(K_ROBOT_ID, "") ?: ""
+        } ?: ""
+        val token = prefs.getString(K_CONNECTOR_TOKEN, "")?.ifBlank {
+            prefs.getString(K_TOKEN, "") ?: ""
+        } ?: ""
+        val host = sanitizeRobotHost(
+            prefs.getString(K_CONNECTOR_ROBOT_HOST, "")?.ifBlank {
+                prefs.getString(K_ROBOT_HOST, "") ?: ""
+            } ?: ""
+        )
+        val port = prefs.getInt(
+            K_CONNECTOR_ROBOT_PORT,
+            prefs.getInt(K_ROBOT_PORT, 8080),
+        )
+        val path = prefs.getString(K_CONNECTOR_ROBOT_PATH, "")?.ifBlank {
+            prefs.getString(K_ROBOT_PATH, "/ws") ?: "/ws"
+        } ?: "/ws"
         if (hub.isBlank() || robotId.isBlank() || token.isBlank() || host.isBlank()) {
             return null
         }
@@ -151,23 +218,23 @@ class ConfigStore(context: Context) {
 
     fun saveConfig(config: ConnectorConfig) {
         prefs.edit()
-            .putString(K_HUB_URL, config.hubBaseUrl)
-            .putString(K_ROBOT_ID, config.robotId)
-            .putString(K_TOKEN, config.token)
-            .putString(K_ROBOT_HOST, sanitizeRobotHost(config.robotHost))
-            .putInt(K_ROBOT_PORT, config.robotPort)
-            .putString(K_ROBOT_PATH, config.robotPath)
+            .putString(K_CONNECTOR_HUB_URL, config.hubBaseUrl)
+            .putString(K_CONNECTOR_ROBOT_ID, config.robotId)
+            .putString(K_CONNECTOR_TOKEN, config.token)
+            .putString(K_CONNECTOR_ROBOT_HOST, sanitizeRobotHost(config.robotHost))
+            .putInt(K_CONNECTOR_ROBOT_PORT, config.robotPort)
+            .putString(K_CONNECTOR_ROBOT_PATH, config.robotPath)
             .apply()
     }
 
     fun clearConfig() {
         prefs.edit()
-            .remove(K_HUB_URL)
-            .remove(K_ROBOT_ID)
-            .remove(K_TOKEN)
-            .remove(K_ROBOT_HOST)
-            .remove(K_ROBOT_PORT)
-            .remove(K_ROBOT_PATH)
+            .remove(K_CONNECTOR_HUB_URL)
+            .remove(K_CONNECTOR_ROBOT_ID)
+            .remove(K_CONNECTOR_TOKEN)
+            .remove(K_CONNECTOR_ROBOT_HOST)
+            .remove(K_CONNECTOR_ROBOT_PORT)
+            .remove(K_CONNECTOR_ROBOT_PATH)
             .apply()
     }
 
@@ -262,6 +329,7 @@ class ConfigStore(context: Context) {
                 hubBaseUrl = current.hubBaseUrl,
             )
         )
+        clearConfig()
         saveStatus("idle")
     }
 }

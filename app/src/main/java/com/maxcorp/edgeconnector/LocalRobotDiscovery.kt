@@ -9,7 +9,8 @@ import okhttp3.OkHttpClient
 
 object LocalRobotDiscovery {
     private const val DISCOVERY_PARALLELISM = 48
-    private const val PROBE_TIMEOUT_MS = 1_200L
+    private const val PROBE_TIMEOUT_MS = 1_000L
+    private const val PREFERRED_PROBE_TIMEOUT_MS = 700L
 
     @OptIn(ExperimentalCoroutinesApi::class)
     suspend fun discover(
@@ -25,6 +26,20 @@ object LocalRobotDiscovery {
         val preferred = preferredHosts
             .mapNotNull { host -> host.substringAfterLast('.', "").toIntOrNull() }
             .filter { it in 1..254 }
+            .distinct()
+
+        for (last in preferred) {
+            val host = "$subnetPrefix.$last"
+            val ok = RobotWsProbe.probe(
+                http,
+                "ws://$host:8080/ws",
+                timeoutMs = PREFERRED_PROBE_TIMEOUT_MS,
+            ).first
+            if (ok) {
+                return@coroutineScope host to ""
+            }
+        }
+
         val commonRange = (100..140).toList() + listOf(10, 20, 30, 50, 60, 70, 80, 90, 150, 160, 170, 180, 190, 200, 210)
         val priority = (preferred + commonRange + (1..254)).distinct()
         val hosts = priority.chunked(DISCOVERY_PARALLELISM)

@@ -92,6 +92,10 @@ class ConnectorForegroundService : Service() {
         }
     }
 
+    private fun localRobotHttpClient(): OkHttpClient {
+        return WifiBoundHttp.forCurrentWifi(this, httpClient)
+    }
+
     private suspend fun runConnectorLoop(config: ConnectorConfig) {
         var backoffSec = 1L
         val agentUrl = config.agentUrl()
@@ -158,7 +162,7 @@ class ConnectorForegroundService : Service() {
             "mcp_notify" -> {
                 val payload = msg.optJSONObject("payload") ?: return
                 try {
-                    RobotJsonRpcProxy.notify(httpClient, config.robotWsUrl(), payload)
+                    RobotJsonRpcProxy.notify(localRobotHttpClient(), config.robotWsUrl(), payload)
                     setRobotWsState(true, "")
                 } catch (exc: Exception) {
                     publishStatus("notify->robot failed: ${exc.message}")
@@ -171,7 +175,7 @@ class ConnectorForegroundService : Service() {
                 val bridgeId = msg.optString("bridge_id")
                 val payload = msg.optJSONObject("payload") ?: return
                 val responsePayload = try {
-                    RobotJsonRpcProxy.call(httpClient, config.robotWsUrl(), payload).also {
+                    RobotJsonRpcProxy.call(localRobotHttpClient(), config.robotWsUrl(), payload).also {
                         setRobotWsState(true, "")
                     }
                 } catch (exc: Exception) {
@@ -190,7 +194,7 @@ class ConnectorForegroundService : Service() {
     }
 
     private suspend fun publishAgentStatus(hub: HubSocket, config: ConnectorConfig) {
-        val (ok, error) = RobotWsProbe.probe(httpClient, config.robotWsUrl())
+        val (ok, error) = RobotWsProbe.probe(localRobotHttpClient(), config.robotWsUrl())
         setRobotWsState(ok, error)
         if (ok) {
             runCatching {

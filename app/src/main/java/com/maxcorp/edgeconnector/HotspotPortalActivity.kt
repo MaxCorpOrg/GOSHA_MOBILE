@@ -391,6 +391,7 @@ class HotspotPortalActivity : AppCompatActivity() {
               function makeResponse(payload) {
                 const status = Number(payload.code || 0);
                 const body = typeof payload.body === 'string' ? payload.body : '';
+                const contentType = typeof payload.contentType === 'string' ? payload.contentType : '';
                 return {
                   ok: status >= 200 && status < 300,
                   status: status,
@@ -400,35 +401,38 @@ class HotspotPortalActivity : AppCompatActivity() {
                   },
                   json: async function() {
                     if (!body) return {};
-                    return JSON.parse(body);
+                    try {
+                      return JSON.parse(body);
+                    } catch (error) {
+                      return {
+                        rawText: body,
+                        invalidJson: true,
+                        contentType: contentType
+                      };
+                    }
                   }
                 };
               }
 
-              function bindPortalForms() {
-                document.querySelectorAll('form').forEach((form) => {
-                  if (form.dataset.maxcorpSubmitBound === '1') return;
-                  form.dataset.maxcorpSubmitBound = '1';
-                  form.addEventListener('submit', function(event) {
-                    if (!window.RobotPortalBridge || !window.RobotPortalBridge.submitPortalForm) return;
-                    event.preventDefault();
-                    const formData = new URLSearchParams();
-                    new FormData(form).forEach((value, key) => {
-                      formData.append(key, typeof value === 'string' ? value : '');
-                    });
-                    const method = (form.getAttribute('method') || 'GET').toUpperCase();
-                    const action = normalizeUrl(form.getAttribute('action') || window.location.href);
-                    if (window.RobotPortalBridge.onProvisionSubmitted) {
-                      window.RobotPortalBridge.onProvisionSubmitted();
-                    }
-                    window.RobotPortalBridge.submitPortalForm(
-                      action,
-                      method,
-                      formData.toString(),
-                      'application/x-www-form-urlencoded'
-                    );
+              function normalizeRequestBody(body) {
+                if (body == null) return '';
+                if (typeof body === 'string') return body;
+                if (body instanceof URLSearchParams) return body.toString();
+                if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                  const formData = new URLSearchParams();
+                  body.forEach((value, key) => {
+                    formData.append(key, typeof value === 'string' ? value : '');
                   });
-                });
+                  return formData.toString();
+                }
+                if (typeof body === 'object') {
+                  try {
+                    return JSON.stringify(body);
+                  } catch (error) {
+                    return '';
+                  }
+                }
+                return String(body);
               }
 
               window.fetch = function(input, init) {
@@ -441,7 +445,7 @@ class HotspotPortalActivity : AppCompatActivity() {
                 }
 
                 const method = ((init && init.method) || 'GET').toUpperCase();
-                const body = init && typeof init.body === 'string' ? init.body : '';
+                const body = normalizeRequestBody(init && init.body);
                 let contentType = '';
                 if (init && init.headers) {
                   if (typeof init.headers.get === 'function') {
@@ -449,6 +453,9 @@ class HotspotPortalActivity : AppCompatActivity() {
                   } else {
                     contentType = init.headers['Content-Type'] || init.headers['content-type'] || '';
                   }
+                }
+                if (!contentType && init && init.body instanceof URLSearchParams) {
+                  contentType = 'application/x-www-form-urlencoded;charset=UTF-8';
                 }
 
                 try {
@@ -468,12 +475,6 @@ class HotspotPortalActivity : AppCompatActivity() {
                   return Promise.reject(new Error(message));
                 }
               };
-
-              bindPortalForms();
-              new MutationObserver(bindPortalForms).observe(document.documentElement || document.body, {
-                childList: true,
-                subtree: true
-              });
             })();
             </script>
         """.trimIndent()
@@ -715,7 +716,7 @@ class HotspotPortalActivity : AppCompatActivity() {
         private const val PORTAL_HOST = "192.168.4.1"
         private const val PORTAL_ALIAS_HOST = "robot.local"
         private const val ROBOT_WIFI_PREFIX = RobotBranding.PRIMARY_WIFI_PREFIX
-        private const val SUCCESS_SETTLE_DELAY_MS = 6500L
+        private const val SUCCESS_SETTLE_DELAY_MS = 3000L
         private const val WAIT_FOR_EXIT_INTERVAL_MS = 1000L
         private const val WAIT_FOR_EXIT_MAX_ATTEMPTS = 30
         private const val RETURN_TIMEOUT_FINISH_DELAY_MS = 1800L

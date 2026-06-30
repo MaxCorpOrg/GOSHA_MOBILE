@@ -39,6 +39,7 @@ data class RobotRuntimeSnapshot(
     val transportState: String,
     val target: String,
     val localHost: String,
+    val localHostHint: String,
     val connectivityEvidence: String,
     val verifiedNow: Boolean,
     val freshDeviceContact: Boolean,
@@ -463,6 +464,7 @@ object PanelApiClient {
             connectivityHasConnected = connectivity.has("connected"),
             connectivityConnected = connectivity.optBoolean("connected", false),
             connectivityLocalHost = connectivity.optString("local_host", ""),
+            connectivityBoardIp = connectivity.optString("board_ip", ""),
             connectivityEvidence = connectivity.optString("evidence", ""),
             connectivityVerifiedNow = connectivity.optBoolean("verified_now", detection.optBoolean("verified_now", false)),
             connectivityFreshDeviceContact = connectivity.optBoolean("fresh_device_contact", false),
@@ -471,6 +473,7 @@ object PanelApiClient {
             connectivityAppVersion = connectivity.optString("app_version", ""),
             cloudLastSeenIso = cloudConsole.optString("last_seen_iso", ""),
             cloudBoardName = cloudConsole.optString("board_name", ""),
+            cloudBoardIp = cloudConsole.optString("board_ip", ""),
             cloudAppVersion = cloudConsole.optString("app_version", ""),
         )
     }
@@ -485,6 +488,7 @@ object PanelApiClient {
         connectivityHasConnected: Boolean,
         connectivityConnected: Boolean,
         connectivityLocalHost: String,
+        connectivityBoardIp: String,
         connectivityEvidence: String,
         connectivityVerifiedNow: Boolean,
         connectivityFreshDeviceContact: Boolean,
@@ -493,13 +497,18 @@ object PanelApiClient {
         connectivityAppVersion: String,
         cloudLastSeenIso: String,
         cloudBoardName: String,
+        cloudBoardIp: String,
         cloudAppVersion: String,
     ): RobotRuntimeSnapshot {
         val target = diagnosticsTarget.ifBlank { fallbackWsUrl }
         val mode = diagnosticsMode.ifBlank { controlTransport }
         val directLocalHost = parseLocalHost(target)
         val normalizedConnectivityLocalHost = directRobotHostOrBlank(connectivityLocalHost)
+        val normalizedBoardIp = directRobotHostOrBlank(
+            connectivityBoardIp.ifBlank { cloudBoardIp }
+        )
         val localHost = normalizedConnectivityLocalHost.ifBlank { directLocalHost }
+        val localHostHint = localHost.ifBlank { normalizedBoardIp }
         val panelConnected = when {
             localHost.isNotBlank() -> true
             connectivityHasConnected -> connectivityConnected
@@ -513,6 +522,7 @@ object PanelApiClient {
             transportState = transportState,
             target = target,
             localHost = localHost,
+            localHostHint = localHostHint,
             connectivityEvidence = connectivityEvidence,
             verifiedNow = connectivityVerifiedNow,
             freshDeviceContact = connectivityFreshDeviceContact,

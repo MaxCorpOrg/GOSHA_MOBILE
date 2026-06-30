@@ -60,6 +60,20 @@ class PanelApiClientTest {
     }
 
     @Test
+    fun `runtime snapshot keeps board ip as local host hint when direct local host is absent`() {
+        val snapshot = buildSnapshot(
+            diagnosticsTarget = "ws://151.241.228.232:18080/mcp/?token=test&robot_id=gosha-main",
+            diagnosticsMode = "cloud-mcp",
+            transportState = "configured",
+            cloudBoardIp = "192.168.1.159",
+        )
+
+        assertEquals("", snapshot.localHost)
+        assertEquals("192.168.1.159", snapshot.localHostHint)
+        assertFalse(snapshot.connected)
+    }
+
+    @Test
     fun `presence payload sends local host only for home wifi local state`() {
         val payload = PanelApiClient.buildMobilePresencePayloadData(
             state = MobilePresenceState.HOME_WIFI_LOCAL,
@@ -92,6 +106,7 @@ class PanelApiClientTest {
         connectivityHasConnected: Boolean = false,
         connectivityConnected: Boolean = false,
         connectivityLocalHost: String = "",
+        connectivityBoardIp: String = "",
         connectivityEvidence: String = "",
         connectivityVerifiedNow: Boolean = false,
         connectivityFreshDeviceContact: Boolean = false,
@@ -100,6 +115,7 @@ class PanelApiClientTest {
         connectivityAppVersion: String = "",
         cloudLastSeenIso: String = "",
         cloudBoardName: String = "",
+        cloudBoardIp: String = "",
         cloudAppVersion: String = "",
     ): RobotRuntimeSnapshot {
         return PanelApiClient.buildRobotRuntimeSnapshot(
@@ -112,6 +128,7 @@ class PanelApiClientTest {
             connectivityHasConnected = connectivityHasConnected,
             connectivityConnected = connectivityConnected,
             connectivityLocalHost = connectivityLocalHost,
+            connectivityBoardIp = connectivityBoardIp,
             connectivityEvidence = connectivityEvidence,
             connectivityVerifiedNow = connectivityVerifiedNow,
             connectivityFreshDeviceContact = connectivityFreshDeviceContact,
@@ -120,6 +137,7 @@ class PanelApiClientTest {
             connectivityAppVersion = connectivityAppVersion,
             cloudLastSeenIso = cloudLastSeenIso,
             cloudBoardName = cloudBoardName,
+            cloudBoardIp = cloudBoardIp,
             cloudAppVersion = cloudAppVersion,
         )
     }
