@@ -7,6 +7,7 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.wifi.SupplicantState
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -25,11 +26,10 @@ object WifiInfoHelper {
             ?: return ""
 
         val activeWifi = manager?.let(::findWifiNetwork)
-        if (activeWifi == null) {
-            return ""
-        }
+        val connectionInfo = wifiManager.connectionInfo
+        val associationCompleted = connectionInfo?.supplicantState == SupplicantState.COMPLETED
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (activeWifi != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val capabilities = manager.getNetworkCapabilities(activeWifi)
             val transportInfo = capabilities?.transportInfo as? WifiInfo
             val ssid = transportInfo?.ssid.orEmpty().trim()
@@ -38,7 +38,11 @@ object WifiInfoHelper {
             }
         }
 
-        val raw = wifiManager.connectionInfo?.ssid.orEmpty().trim()
+        if (activeWifi == null && !associationCompleted) {
+            return ""
+        }
+
+        val raw = connectionInfo?.ssid.orEmpty().trim()
         if (raw.isBlank() || raw == "<unknown ssid>") return ""
         return raw.removePrefix("\"").removeSuffix("\"")
     }
@@ -56,6 +60,11 @@ object WifiInfoHelper {
             if (prefix.isNotBlank()) {
                 return prefix
             }
+        }
+
+        // Не используем старый адрес из WifiManager, если Android уже не считает Wi‑Fi активной сетью.
+        if (currentSsid(context).isBlank()) {
+            return ""
         }
 
         val ip = wifiManager.connectionInfo?.ipAddress ?: 0

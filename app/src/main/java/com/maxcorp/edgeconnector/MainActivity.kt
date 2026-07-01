@@ -77,6 +77,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvStatus: TextView
     private lateinit var tvAppTitle: TextView
     private lateinit var tvAppSubtitle: TextView
+    private lateinit var tvMenuHeroTitle: TextView
+    private lateinit var tvMenuHeroBody: TextView
     private lateinit var tvLoadingTitle: TextView
     private lateinit var tvLoadingBody: TextView
     private lateinit var tvMenuRobot: TextView
@@ -259,6 +261,8 @@ class MainActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvStatus)
         tvAppTitle = findViewById(R.id.tvAppTitle)
         tvAppSubtitle = findViewById(R.id.tvAppSubtitle)
+        tvMenuHeroTitle = findViewById(R.id.tvMenuHeroTitle)
+        tvMenuHeroBody = findViewById(R.id.tvMenuHeroBody)
         tvLoadingTitle = findViewById(R.id.tvLoadingTitle)
         tvLoadingBody = findViewById(R.id.tvLoadingBody)
         tvMenuRobot = findViewById(R.id.tvMenuRobot)
@@ -877,11 +881,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun currentVisibleRobotSsid(maxAgeMs: Long = 12_000L): String {
         val currentSsid = WifiInfoHelper.currentSsid(this)
+        val acceptedPrefixes = RobotBranding.acceptedWifiPrefixes(robotWifiPrefix)
         val nearbyRobotSsid = WifiInfoHelper.nearbySsidByPrefixes(
             this,
-            RobotBranding.acceptedWifiPrefixes(robotWifiPrefix),
+            acceptedPrefixes,
             maxAgeMs = maxAgeMs,
-        )
+        ).ifBlank {
+            WifiInfoHelper.nearbySsidByPrefixesAnyAge(this, acceptedPrefixes)
+        }
         return RobotConnectivityResolver.visibleRobotSsid(
             currentSsid = currentSsid,
             nearbyRobotSsid = nearbyRobotSsid,
@@ -1590,18 +1597,32 @@ class MainActivity : AppCompatActivity() {
                 robotWifiConnectTimeoutJob?.cancel()
                 cancelMenuStabilization()
                 wifiBackToMenuMode = false
+                val hasHomeWifi = WifiInfoHelper.currentSubnetPrefix(this).isNotBlank()
                 val updatedDraft = configStore.loadDraft().copy(
                     robotHost = "",
                     wifiReconnectPending = false,
                     setupCompleted = true,
                 )
                 persistDraft(updatedDraft)
-                tvRobotCheck.text = getString(R.string.wifi_robot_resolving_address)
-                tvSuccessMessage.text = getString(R.string.wifi_robot_connected_platform)
-                updateLocalDiagnostics(getString(R.string.diagnostics_local_platform_only))
+                if (hasHomeWifi) {
+                    tvRobotCheck.text = getString(R.string.wifi_robot_resolving_address)
+                    tvSuccessMessage.text = getString(R.string.wifi_robot_connected_platform)
+                    updateLocalDiagnostics(getString(R.string.diagnostics_local_platform_only))
+                } else {
+                    tvRobotCheck.text = getString(R.string.wifi_robot_wait_home_wifi)
+                    tvSuccessMessage.text = getString(R.string.wifi_robot_wait_home_wifi)
+                    updateLocalDiagnostics(getString(R.string.diagnostics_local_wait_home_wifi))
+                    WifiInfoHelper.requestFreshScanIfPossible(this)
+                }
                 diagnosticsPanel = getString(R.string.diagnostics_panel_connected_platform)
                 renderDiagnostics()
-                showMenuWithStatus(getString(R.string.menu_status_platform_only))
+                showMenuWithStatus(
+                    if (hasHomeWifi) {
+                        getString(R.string.menu_status_platform_only)
+                    } else {
+                        getString(R.string.menu_status_platform_wait_home_wifi)
+                    }
+                )
                 stopConnectorService()
                 toastText?.let(::toast)
                 true
@@ -1636,7 +1657,13 @@ class MainActivity : AppCompatActivity() {
                 return currentSsid
             }
 
-            val nearby = WifiInfoHelper.nearbySsidByPrefixes(this, RobotBranding.acceptedWifiPrefixes(robotWifiPrefix))
+            val acceptedPrefixes = RobotBranding.acceptedWifiPrefixes(robotWifiPrefix)
+            val nearby = WifiInfoHelper.nearbySsidByPrefixes(
+                this,
+                acceptedPrefixes,
+            ).ifBlank {
+                WifiInfoHelper.nearbySsidByPrefixesAnyAge(this, acceptedPrefixes)
+            }
             if (nearby.isNotBlank()) {
                 return nearby
             }
@@ -2336,7 +2363,53 @@ class MainActivity : AppCompatActivity() {
     private fun setStatus(text: String) {
         diagnosticsDecision = text
         tvStatus.text = getString(R.string.status_prefix, text)
+        updateMenuHero(text)
         renderDiagnostics()
+    }
+
+    private fun updateMenuHero(statusText: String?) {
+        val titleRes = when {
+            statusText.isNullOrBlank() -> R.string.menu_hero_title
+            matchesStatusTemplate(statusText, R.string.menu_status_checking) ||
+                matchesStatusTemplate(statusText, R.string.menu_status_checking_saved_host) ->
+                R.string.menu_hero_title_checking
+
+            matchesStatusTemplate(statusText, R.string.menu_status_no_home_wifi) ->
+                R.string.menu_hero_title_no_home_wifi
+
+            matchesStatusTemplate(statusText, R.string.menu_status_platform_wait_home_wifi) ->
+                R.string.menu_hero_title_no_home_wifi
+
+            matchesStatusTemplate(statusText, R.string.menu_status_vpn_active) ->
+                R.string.menu_hero_title_vpn_active
+
+            matchesStatusTemplate(statusText, R.string.menu_status_phone_on_robot_wifi) ||
+                matchesStatusTemplate(statusText, R.string.menu_status_robot_visible) ->
+                R.string.menu_hero_title_robot_visible
+
+            matchesStatusTemplate(statusText, R.string.menu_status_connected_host) ->
+                R.string.menu_hero_title_connected
+
+            matchesStatusTemplate(statusText, R.string.menu_status_platform_only) ->
+                R.string.menu_hero_title_platform_only
+
+            matchesStatusTemplate(statusText, R.string.menu_status_robot_missing) ->
+                R.string.menu_hero_title_missing
+
+            else -> R.string.menu_hero_title
+        }
+        tvMenuHeroTitle.text = getString(titleRes)
+        tvMenuHeroBody.text = statusText ?: getString(R.string.menu_hero_body)
+    }
+
+    private fun matchesStatusTemplate(value: String, templateRes: Int): Boolean {
+        val template = getString(templateRes)
+        if (!template.contains("%1\$s")) {
+            return value == template
+        }
+        val prefix = template.substringBefore("%1\$s")
+        val suffix = template.substringAfter("%1\$s")
+        return value.startsWith(prefix) && value.endsWith(suffix)
     }
 
     private fun toast(text: String) {
