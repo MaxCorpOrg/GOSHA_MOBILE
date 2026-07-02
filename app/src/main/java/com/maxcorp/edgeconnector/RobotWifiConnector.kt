@@ -74,7 +74,10 @@ object RobotWifiConnector {
                     activeManager = manager
                     activeCallback = this
                     activeNetwork = network
-                    manager.bindProcessToNetwork(network)
+                    // Удерживаем сеть робота для адресных локальных запросов,
+                    // но не переводим на нее весь процесс. Иначе панель и другие
+                    // внешние вызовы теряют интернет-маршрут, пока телефон сидит
+                    // в локальной точке доступа робота без выхода наружу.
                     onConnected()
                 }
 
@@ -123,16 +126,10 @@ object RobotWifiConnector {
             RobotBranding.isRobotWifiSsid(ssid)
         }
         if (requestedRobotNetwork != null) {
-            return try {
-                activeManager = manager
-                manager.bindProcessToNetwork(requestedRobotNetwork)
-                Log.w(LOG_TAG, "bindToCurrentRobotWifi reused requested network $requestedRobotNetwork")
-                true
-            } catch (exc: Exception) {
-                Log.w(LOG_TAG, "bindToCurrentRobotWifi reuse failed: ${exc.message}")
-                release()
-                false
-            }
+            activeManager = manager
+            activeNetwork = requestedRobotNetwork
+            Log.w(LOG_TAG, "bindToCurrentRobotWifi reused requested network $requestedRobotNetwork")
+            return true
         }
 
         val robotNetwork = findRobotWifiNetwork(manager)
@@ -147,17 +144,10 @@ object RobotWifiConnector {
             release()
         }
 
-        return try {
-            activeManager = manager
-            activeNetwork = robotNetwork
-            manager.bindProcessToNetwork(robotNetwork)
-            Log.w(LOG_TAG, "bindToCurrentRobotWifi bound to discovered robot network $robotNetwork")
-            true
-        } catch (exc: Exception) {
-            Log.w(LOG_TAG, "bindToCurrentRobotWifi failed: ${exc.message}")
-            release()
-            false
-        }
+        activeManager = manager
+        activeNetwork = robotNetwork
+        Log.w(LOG_TAG, "bindToCurrentRobotWifi remembered discovered robot network $robotNetwork")
+        return true
     }
 
     fun release() {
@@ -166,10 +156,6 @@ object RobotWifiConnector {
             activeCallback?.let { callback ->
                 activeManager?.unregisterNetworkCallback(callback)
             }
-        } catch (_: Exception) {
-        }
-        try {
-            activeManager?.bindProcessToNetwork(null)
         } catch (_: Exception) {
         }
         activeCallback = null

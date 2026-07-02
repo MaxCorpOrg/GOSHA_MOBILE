@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -25,11 +26,18 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class ConnectorForegroundService : Service() {
+    private val logTag = "ConnectorService"
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
+        .build()
+    private val panelHttpClient: OkHttpClient = httpClient.newBuilder()
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(3, TimeUnit.SECONDS)
+        .writeTimeout(3, TimeUnit.SECONDS)
+        .callTimeout(4, TimeUnit.SECONDS)
         .build()
 
     private lateinit var configStore: ConfigStore
@@ -88,6 +96,9 @@ class ConnectorForegroundService : Service() {
         connectorJob.cancel()
         connectorJob = SupervisorJob()
         serviceScope.launch(connectorJob) {
+            runPanelPresenceLoop(config)
+        }
+        serviceScope.launch(connectorJob) {
             runConnectorLoop(config)
         }
     }
@@ -138,6 +149,17 @@ class ConnectorForegroundService : Service() {
             publishStatus("Переподключение через ${backoffSec}s")
             delay(backoffSec * 1000)
             backoffSec = (backoffSec * 2).coerceAtMost(20L)
+        }
+    }
+
+    private suspend fun runPanelPresenceLoop(config: ConnectorConfig) {
+        while (serviceScope.isActive && connectorJob.isActive) {
+            try {
+                refreshPanelPresence(config)
+            } catch (exc: Exception) {
+                Log.w(logTag, "Presence refresh failed: ${exc.message}")
+            }
+            delay(PANEL_PRESENCE_REFRESH_INTERVAL_MS)
         }
     }
 
@@ -194,23 +216,11 @@ class ConnectorForegroundService : Service() {
     }
 
     private suspend fun publishAgentStatus(hub: HubSocket, config: ConnectorConfig) {
-        val (ok, error) = RobotWsProbe.probe(localRobotHttpClient(), config.robotWsUrl())
-        setRobotWsState(ok, error)
-        if (ok) {
-            runCatching {
-                val draft = configStore.loadDraft()
-                if (draft.robotId == config.robotId) {
-                    PanelApiClient.updateMobilePresence(
-                        http = httpClient,
-                        baseUrl = draft.panelBaseUrl,
-                        robotId = config.robotId,
-                        state = MobilePresenceState.HOME_WIFI_LOCAL,
-                        localHost = config.robotHost,
-                        panelClientToken = draft.panelClientToken,
-                        onboardingCode = draft.onboardingCode,
-                    )
-                }
-            }
+        val (ok, error) = probeRobotWs(config)
+        runCatching {
+            refreshPanelPresence(config, ok, error)
+        }.onFailure { exc ->
+            Log.w(logTag, "Panel presence refresh failed during agent status: ${exc.message}")
         }
 
         val status = JSONObject()
@@ -226,6 +236,43 @@ class ConnectorForegroundService : Service() {
                 .put("status", status)
                 .put("ts", System.currentTimeMillis() / 1000)
                 .toString()
+        )
+    }
+
+    private suspend fun probeRobotWs(config: ConnectorConfig): Pair<Boolean, String> {
+        val (ok, error) = RobotWsProbe.probe(localRobotHttpClient(), config.robotWsUrl())
+        setRobotWsState(ok, error)
+        return ok to error
+    }
+
+    private suspend fun refreshPanelPresence(
+        config: ConnectorConfig,
+        probeOk: Boolean? = null,
+        probeError: String = "",
+    ) {
+        val (ok, error) = if (probeOk == null) {
+            probeRobotWs(config)
+        } else {
+            setRobotWsState(probeOk, probeError)
+            probeOk to probeError
+        }
+        if (!ok) {
+            return
+        }
+
+        val draft = configStore.loadDraft()
+        if (draft.robotId != config.robotId) {
+            return
+        }
+
+        PanelApiClient.updateMobilePresence(
+            http = panelHttpClient,
+            baseUrl = draft.panelBaseUrl,
+            robotId = config.robotId,
+            state = MobilePresenceState.HOME_WIFI_LOCAL,
+            localHost = config.robotHost,
+            panelClientToken = draft.panelClientToken,
+            onboardingCode = draft.onboardingCode,
         )
     }
 
@@ -309,6 +356,7 @@ class ConnectorForegroundService : Service() {
 
         private const val CHANNEL_ID = "maxcorp_connector_channel"
         private const val NOTIFICATION_ID = 91101
+        private const val PANEL_PRESENCE_REFRESH_INTERVAL_MS = 20_000L
 
         fun startIntent(context: Context, config: ConnectorConfig): Intent {
             return config.toIntent(Intent(context, ConnectorForegroundService::class.java).apply {

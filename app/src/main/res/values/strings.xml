@@ -140,12 +140,15 @@
     <string name="wifi_permission_request_status">Жду разрешение Android на подключение к Wi‑Fi робота</string>
     <string name="wifi_connecting_robot_text">Подключаю телефон к сети робота GOSHA-XXXX...</string>
     <string name="wifi_connecting_robot_status">Подключаю телефон к Wi‑Fi робота</string>
+    <string name="wifi_connecting_robot_request_choice">Если Android сейчас покажет выбор сети, выберите %1$s. Жду подтверждение перехода телефона в сеть робота.</string>
     <string name="wifi_connected_robot_text">Телефон подключен к сети робота: %1$s</string>
     <string name="wifi_connect_failed_status">Не удалось подключиться к Wi‑Fi робота</string>
     <string name="wifi_continue_on_robot_network">Телефон уже подключен к сети робота. Продолжите подключение.</string>
     <string name="wifi_robot_visible_nearby">Вижу рядом сеть робота %1$s. Нажмите «Подключить робота», чтобы открыть подключение.</string>
     <string name="wifi_reconnect_hint">Можно подключить робота заново и выбрать новую сеть Wi‑Fi.</string>
     <string name="wifi_reconnect_status_checking">Проверяю, где сейчас робот: в домашней сети, в своей сети GOSHA или вне сети.</string>
+    <string name="wifi_reconnect_status_checking_saved_host">Сначала быстро проверяю адрес робота %1$s, потом при необходимости сверяю домашнюю сеть и панель.</string>
+    <string name="wifi_reconnect_status_checking_network">Быстро проверяю домашнюю сеть и состояние робота в панели.</string>
     <string name="wifi_reconnect_status_found">Робот уже в вашей сети. Можно вернуться в меню или подключить его к новому Wi‑Fi.</string>
     <string name="wifi_reconnect_status_platform_only">Робот уже вышел на связь с платформой. Локальный адрес ещё уточняется. Можно вернуться в меню или подключить новую сеть.</string>
     <string name="wifi_reconnect_status_not_found">Робот сейчас не найден. Если хотите подключить его заново, переведите его в режим Wi‑Fi и нажмите «Подключить робота».</string>
