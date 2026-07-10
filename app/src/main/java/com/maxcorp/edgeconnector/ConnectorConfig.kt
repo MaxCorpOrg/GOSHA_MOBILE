@@ -48,6 +48,8 @@ private const val K_CONNECTOR_TOKEN = "connector_token"
 private const val K_CONNECTOR_ROBOT_HOST = "connector_robot_host"
 private const val K_CONNECTOR_ROBOT_PORT = "connector_robot_port"
 private const val K_CONNECTOR_ROBOT_PATH = "connector_robot_path"
+private const val K_BACKGROUND_ACCESS_GUIDANCE_VERSION = "background_access_guidance_version"
+private const val K_NOTIFICATION_PERMISSION_PROMPT_VERSION = "notification_permission_prompt_version"
 
 private const val CLIENT_NAME = "android-app"
 private const val CLIENT_VERSION = "0.1.0"
@@ -249,6 +251,24 @@ class ConfigStore(context: Context) {
         val status = prefs.getString(K_STATUS, "idle") ?: "idle"
         val ts = prefs.getLong(K_STATUS_TS, 0L)
         return status to ts
+    }
+
+    fun backgroundAccessGuidanceVersion(): Int =
+        prefs.getInt(K_BACKGROUND_ACCESS_GUIDANCE_VERSION, 0)
+
+    fun markBackgroundAccessGuidanceShown(version: Int) {
+        prefs.edit()
+            .putInt(K_BACKGROUND_ACCESS_GUIDANCE_VERSION, version)
+            .apply()
+    }
+
+    fun notificationPermissionPromptVersion(): Int =
+        prefs.getInt(K_NOTIFICATION_PERMISSION_PROMPT_VERSION, 0)
+
+    fun markNotificationPermissionPromptShown(version: Int) {
+        prefs.edit()
+            .putInt(K_NOTIFICATION_PERMISSION_PROMPT_VERSION, version)
+            .apply()
     }
 
     fun loadDraft(): OnboardingDraft {

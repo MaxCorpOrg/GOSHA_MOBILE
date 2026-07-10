@@ -211,6 +211,16 @@
     <string name="device_status_label_plan">Тариф</string>
     <string name="device_status_robot_empty">Не зарегистрирован</string>
     <string name="device_status_wifi_empty">Телефон не подключен к Wi‑Fi</string>
+    <string name="background_access_label">Фоновая связь с панелью</string>
+    <string name="background_access_dialog_title">Разрешите Гоше работать в фоне</string>
+    <string name="background_access_transsion_instruction">На телефонах TECNO, Infinix и itel системное энергосбережение может остановить связь с панелью даже при активном уведомлении. На следующем экране найдите «Гоша» и выберите «Нет ограничений».</string>
+    <string name="background_access_generic_instruction">Чтобы связь с панелью не прерывалась после сворачивания приложения, разрешите Гоше фоновую работу и снимите ограничения батареи в настройках телефона.</string>
+    <string name="background_access_open_settings">Открыть настройки</string>
+    <string name="background_access_configure">Настроить фоновую работу</string>
+    <string name="background_access_later">Позже</string>
+    <string name="background_access_open_error">Не удалось открыть настройки фоновой работы</string>
+    <string name="background_access_notifications_disabled">Уведомления Гоши отключены. Разрешите их, чтобы Android показывал постоянную фоновую службу.</string>
+    <string name="background_access_notification_settings">Настроить уведомления</string>
 
     <string name="cabinet_title">Личный кабинет</string>
     <string name="cabinet_subtitle">Здесь можно проверить и изменить имя, почту и телефон.</string>

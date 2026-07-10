@@ -26,6 +26,14 @@ internal object ProvisionCoordinator {
     private val earlySettlePanelCheckIndices = setOf(0, 2, 4)
     private val discoveryPanelCheckIndices = setOf(9, 17, 25)
 
+    fun shouldStartReturnCheck(
+        awaitingRobotProvision: Boolean,
+        robotWifiPortalActive: Boolean,
+        returnCheckRunning: Boolean,
+    ): Boolean {
+        return awaitingRobotProvision && !robotWifiPortalActive && !returnCheckRunning
+    }
+
     fun planAttempt(
         index: Int,
         totalAttempts: Int,

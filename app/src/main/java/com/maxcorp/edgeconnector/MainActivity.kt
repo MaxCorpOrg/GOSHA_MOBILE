@@ -1,8 +1,10 @@
 package com.maxcorp.gosha.mobile
 
+import android.Manifest
 import android.content.Intent
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -22,6 +24,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.Lifecycle
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineScope
@@ -116,6 +119,7 @@ class MainActivity : AppCompatActivity() {
     private var currentBundle: OnboardingBundle? = null
     private var currentStep: WizardStep = WizardStep.WELCOME
     private var awaitingRobotProvision = false
+    private var robotWifiPortalActive = false
     private var pendingRobotWifiConnection = false
     private var robotProvisionCheckJob: Job? = null
     private var robotWifiConnectTimeoutJob: Job? = null
@@ -141,8 +145,13 @@ class MainActivity : AppCompatActivity() {
     private var diagnosticsDecision = ""
     private var lastPresenceSignature = ""
     private var pendingRobotWifiPermissionPurpose: PermissionRequestPurpose? = null
+    private var notificationPermissionRequestStarted = false
+    private var notificationPermissionRequestPending = false
+    private var backgroundAccessDialog: AlertDialog? = null
 
     private lateinit var robotWifiPermissionsLauncher: ActivityResultLauncher<Array<String>>
+    private lateinit var robotWifiPortalLauncher: ActivityResultLauncher<Intent>
+    private lateinit var notificationPermissionLauncher: ActivityResultLauncher<String>
 
     private data class ReachabilityCheckResult(
         val panelSnapshot: RobotRuntimeSnapshot?,
@@ -184,6 +193,20 @@ class MainActivity : AppCompatActivity() {
                 toast(getString(R.string.wifi_permission_denied_toast))
             }
         }
+        robotWifiPortalLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) {
+            robotWifiPortalActive = false
+            Log.d(logTag, "Robot Wi-Fi portal returned; starting post-provision check")
+            maybeContinueProvisionAfterReturn()
+        }
+        notificationPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            notificationPermissionRequestPending = false
+            Log.d(logTag, "Notification permission granted=$granted")
+            rootContent.post { maybeOfferBackgroundAccess() }
+        }
 
         bindViews()
         setupListeners()
@@ -218,6 +241,7 @@ class MainActivity : AppCompatActivity() {
         if (!awaitingRobotProvision && currentStep == WizardStep.MENU && configStore.loadDraft().setupCompleted) {
             applyImmediateMenuHint()
             scheduleMenuStabilization(reason = "resume")
+            rootContent.post { maybePrepareBackgroundAccess() }
         }
     }
 
@@ -242,6 +266,8 @@ class MainActivity : AppCompatActivity() {
         loadingShadowAnimator?.cancel()
         loadingSparkleLeftAnimator?.cancel()
         loadingSparkleRightAnimator?.cancel()
+        backgroundAccessDialog?.dismiss()
+        backgroundAccessDialog = null
         uiScope.cancel()
         super.onDestroy()
     }
@@ -808,6 +834,7 @@ class MainActivity : AppCompatActivity() {
         if (step == WizardStep.MENU) {
             updateMenuUi()
             setStatus(getString(R.string.runtime_status_menu))
+            rootContent.post { maybePrepareBackgroundAccess() }
         }
 
         if (step != WizardStep.LOADING || previousStep == WizardStep.LOADING) {
@@ -1707,8 +1734,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeContinueProvisionAfterReturn() {
-        if (!awaitingRobotProvision) return
-        if (robotProvisionCheckJob?.isActive == true) return
+        val shouldStartReturnCheck = ProvisionCoordinator.shouldStartReturnCheck(
+            awaitingRobotProvision = awaitingRobotProvision,
+            robotWifiPortalActive = robotWifiPortalActive,
+            returnCheckRunning = robotProvisionCheckJob?.isActive == true,
+        )
+        if (!shouldStartReturnCheck) {
+            if (robotWifiPortalActive) {
+                Log.d(logTag, "Post-provision check deferred while Robot Wi-Fi portal is active")
+            }
+            return
+        }
 
         showLoadingState(
             title = getString(R.string.loading_title_after_portal),
@@ -1971,7 +2007,8 @@ class MainActivity : AppCompatActivity() {
         if (RobotBranding.isRobotWifiSsid(WifiInfoHelper.currentSsid(this), robotWifiPrefix)) {
             RobotWifiConnector.bindToCurrentRobotWifi(this)
         }
-        startActivity(Intent(this, HotspotPortalActivity::class.java))
+        robotWifiPortalActive = true
+        robotWifiPortalLauncher.launch(Intent(this, HotspotPortalActivity::class.java))
     }
 
     private fun maybeRestoreConnectedRobot() {
@@ -2293,6 +2330,99 @@ class MainActivity : AppCompatActivity() {
             )
         } catch (exc: Exception) {
             Log.w(logTag, "syncConnectorService failed: ${exc.message}")
+        }
+    }
+
+    private fun maybeRequestNotificationPermission() {
+        if (notificationPermissionRequestStarted) return
+        val permissionGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (
+            BackgroundAccessPolicy.shouldRequestNotificationPermission(
+                sdkInt = Build.VERSION.SDK_INT,
+                permissionGranted = permissionGranted,
+                requestedVersion = configStore.notificationPermissionPromptVersion(),
+            )
+        ) {
+            notificationPermissionRequestStarted = true
+            notificationPermissionRequestPending = true
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            configStore.markNotificationPermissionPromptShown(
+                BackgroundAccessPolicy.NOTIFICATION_PROMPT_VERSION
+            )
+        }
+    }
+
+    private fun maybePrepareBackgroundAccess() {
+        val draft = configStore.loadDraft()
+        if (!draft.setupCompleted || draft.wifiReconnectPending) return
+        if (draft.toConnectorConfigOrNull() == null) return
+
+        val permissionGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        val permissionRequired = BackgroundAccessPolicy.shouldRequestNotificationPermission(
+            sdkInt = Build.VERSION.SDK_INT,
+            permissionGranted = permissionGranted,
+            requestedVersion = configStore.notificationPermissionPromptVersion(),
+        )
+        if (permissionRequired && !notificationPermissionRequestStarted) {
+            maybeRequestNotificationPermission()
+            return
+        }
+        if (notificationPermissionRequestPending) return
+        if (!permissionRequired || notificationPermissionRequestStarted) {
+            maybeOfferBackgroundAccess()
+        }
+    }
+
+    private fun maybeOfferBackgroundAccess() {
+        if (!BackgroundAccess.isTranssionFamily()) return
+        if (currentStep != WizardStep.MENU) return
+        if (isFinishing || isDestroyed) return
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (backgroundAccessDialog?.isShowing == true) return
+        val draft = configStore.loadDraft()
+        if (
+            !BackgroundAccessPolicy.shouldShowGuidance(
+                setupCompleted = draft.setupCompleted,
+                wifiReconnectPending = draft.wifiReconnectPending,
+                connectorConfigReady = draft.toConnectorConfigOrNull() != null,
+                shownVersion = configStore.backgroundAccessGuidanceVersion(),
+            )
+        ) return
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.background_access_dialog_title)
+            .setMessage(R.string.background_access_transsion_instruction)
+            .setNegativeButton(R.string.background_access_later) { _, _ ->
+                configStore.markBackgroundAccessGuidanceShown(
+                    BackgroundAccessPolicy.GUIDANCE_VERSION
+                )
+            }
+            .setPositiveButton(R.string.background_access_open_settings) { _, _ ->
+                configStore.markBackgroundAccessGuidanceShown(
+                    BackgroundAccessPolicy.GUIDANCE_VERSION
+                )
+                if (!BackgroundAccess.openSettings(this)) {
+                    toast(getString(R.string.background_access_open_error))
+                }
+            }
+            .create()
+        dialog.setOnDismissListener {
+            if (backgroundAccessDialog === dialog) {
+                backgroundAccessDialog = null
+            }
+        }
+        backgroundAccessDialog = dialog
+        try {
+            dialog.show()
+        } catch (exc: Exception) {
+            backgroundAccessDialog = null
+            Log.w(logTag, "Background access guidance could not be shown: ${exc.message}")
         }
     }
 

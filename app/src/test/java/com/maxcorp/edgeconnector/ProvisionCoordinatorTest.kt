@@ -9,6 +9,42 @@ class ProvisionCoordinatorTest {
     private val robotWifiPrefix = RobotBranding.PRIMARY_WIFI_PREFIX
 
     @Test
+    fun `return check waits until robot portal closes`() {
+        assertFalse(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = true,
+                robotWifiPortalActive = true,
+                returnCheckRunning = false,
+            )
+        )
+        assertTrue(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = true,
+                robotWifiPortalActive = false,
+                returnCheckRunning = false,
+            )
+        )
+    }
+
+    @Test
+    fun `return check does not start twice or outside provisioning`() {
+        assertFalse(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = true,
+                robotWifiPortalActive = false,
+                returnCheckRunning = true,
+            )
+        )
+        assertFalse(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = false,
+                robotWifiPortalActive = false,
+                returnCheckRunning = false,
+            )
+        )
+    }
+
+    @Test
     fun `stays on robot wifi first without manual hint`() {
         val plan = ProvisionCoordinator.planAttempt(
             index = 0,

@@ -86,12 +86,53 @@
             android:padding="16dp"
             style="@style/TextAppearance.MaxCorp.Body" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="@string/background_access_label"
+            style="@style/TextAppearance.MaxCorp.SectionLabel" />
+
+        <TextView
+            android:id="@+id/tvStatusBackground"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_playful_field"
+            android:padding="16dp"
+            style="@style/TextAppearance.MaxCorp.Body" />
+
+        <Button
+            android:id="@+id/btnBackgroundSettings"
+            style="@style/Widget.MaxCorp.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/background_access_configure" />
+
+        <TextView
+            android:id="@+id/tvStatusNotifications"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_playful_field"
+            android:padding="16dp"
+            android:text="@string/background_access_notifications_disabled"
+            style="@style/TextAppearance.MaxCorp.Body" />
+
+        <Button
+            android:id="@+id/btnNotificationSettings"
+            style="@style/Widget.MaxCorp.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/background_access_notification_settings" />
+
         <Button
             android:id="@+id/btnBackToMenu"
             style="@style/Widget.MaxCorp.Button.Secondary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="12dp"
             android:layout_marginBottom="24dp"
             android:text="@string/button_back_to_menu" />
 
