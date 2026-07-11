@@ -183,11 +183,11 @@
     <string name="menu_label_owner">Пользователь</string>
     <string name="menu_robot_empty">Робот еще не подключен</string>
     <string name="menu_value_empty">Не указано</string>
-    <string name="menu_button_status">Проверить робота</string>
+    <string name="menu_button_status">Статус и диагностика</string>
     <string name="menu_button_cabinet">Мой кабинет</string>
     <string name="menu_button_guides">Что умеет Гоша</string>
     <string name="menu_button_support">Нужна помощь</string>
-    <string name="menu_button_reconnect">Подключить к новому Wi‑Fi</string>
+    <string name="menu_button_reconnect">Сменить Wi‑Fi робота</string>
     <string name="menu_button_reset">Подготовить для нового робота</string>
     <string name="status_prefix">Статус: %1$s</string>
     <string name="status_connected_default">Устройство подключено и готово к работе</string>
@@ -277,7 +277,7 @@
     <string name="portal_status_wait">Ожидание подключения к Wi‑Fi робота...</string>
     <string name="portal_status_opening">Открываю страницу робота...</string>
     <string name="portal_status_opened">Страница робота открыта. Выберите для робота домашний Wi‑Fi 2.4 GHz и нажмите подключение.</string>
-    <string name="portal_status_submitted">Настройки отправлены. Жду, пока робот применит Wi‑Fi и перезапустится...</string>
+    <string name="portal_status_submitted">Запрос отправлен роботу. Жду ответ портала или переход к завершению...</string>
     <string name="portal_status_done">Робот принял настройки. Возвращаю в приложение...</string>
     <string name="portal_status_wait_reboot">Робот принял настройки. Жду, пока его сеть GOSHA исчезнет и телефон вернется в домашний Wi‑Fi...</string>
     <string name="portal_status_wait_reboot_retry">Робот перезагружается и выходит из своей сети... %1$d/%2$d</string>
