@@ -250,8 +250,13 @@
      - действие `MENU` переподключения переименовано в «Сменить Wi‑Fi робота», поднято выше и оставлено основной кнопкой; информационная кнопка теперь «Статус и диагностика» во вторичном стиле;
      - локальная проверка пройдена:
        - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
-   - Остаточный риск Android после этой правки:
-     - новая сборка ещё не проходила живой цикл на устройстве; reviewer должен проверить, что при наличии сети робота после неответившего `POST /submit` нет ухода в `candidate=default`, а повторный успешный `POST` и post-portal поиск не сломаны.
+   - Независимый reviewer не нашёл P0/P1, после чего установлен APK SHA-256 `5b7f253ddba0736b216b6d520352901d657edd8bc04371171498fb135fd90ca1` и выполнен живой цикл:
+     - портал и ресурсы шли только через сеть робота; после временного `code=0` на `/scan` и первого `POST /submit` перехода на `candidate=default` не было;
+     - первый `POST /submit` в `21:28:10` через `candidate=576` всё ещё дал `code=0`;
+     - повторный запрос в `21:29:02` через `candidate=578` получил `200`, затем `done.html` получил `200`;
+     - телефон вернулся в `4G-CPE-1884`, робот найден по `192.168.0.103`, `MENU` и свежий `home_wifi_local` восстановились;
+     - Android-P1 запасного маршрута закрыт; причина первого `code=0` требует следующего прогона с заранее включённым UART прошивки;
+     - журнал `/home/max/AI_OFFICE/local_only/ai-office/logs/manual-20260711-portal-route-fix-live/portal-route-fix-adb.log`, SHA-256 `0836673d4d4cab3aa8ec8405b11bf5e50057c43bf547e05d4062def1129d815c`.
    - Внешний P1 операторской диагностики платформы исправлен отдельно:
      - ветка `hotfix/edge-hub-probe-state`, коммит `10bcbf1`;
      - draft PR `https://github.com/MaxCorpOrg/GOSHA_PLATFORM/pull/25`;

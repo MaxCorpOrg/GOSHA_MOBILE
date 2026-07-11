@@ -238,7 +238,14 @@
   - в `MENU` основное действие теперь «Сменить Wi‑Fi робота», оно поднято выше; информационная кнопка стала «Статус и диагностика» и вторичной.
 - Проверка кода после этой правки пройдена:
   - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
-- Следующий Android-шаг: review и живой короткий прогон новой сборки; в журнале при наличии сети робота не должно быть `candidate=default` для `192.168.4.1`, а повторный `POST /submit`, `done.html` и post-portal поиск должны остаться рабочими.
+- Независимый review не нашёл P0/P1; правка сохранена в ветке `feature/mobile-hotspot-portal`, коммит `28ad43d`, и установлена на телефон как APK SHA-256 `5b7f253ddba0736b216b6d520352901d657edd8bc04371171498fb135fd90ca1`.
+- Живой короткий прогон новой политики маршрута завершён:
+  - портал и его ресурсы открылись только через сеть робота, а после временных `code=0` больше не было `candidate=default`;
+  - первый `POST /submit` в `21:28:10` через `candidate=576` всё ещё дал `code=0`;
+  - повторный `POST /submit` в `21:29:02` через `candidate=578` получил `200`, `done.html` также получил `200`;
+  - телефон вернулся в `4G-CPE-1884`, робот найден по `192.168.0.103`, `MENU` и свежий `home_wifi_local` восстановились;
+  - Android-P1 неверного fallback закрыт; следующий шаг — заранее включить UART и установить причину первого `code=0` на стороне портала/прошивки;
+  - журнал: `/home/max/AI_OFFICE/local_only/ai-office/logs/manual-20260711-portal-route-fix-live/portal-route-fix-adb.log`, SHA-256 `0836673d4d4cab3aa8ec8405b11bf5e50057c43bf547e05d4062def1129d815c`.
 - Платформенный P1 по `robot_ws_probe_state` исправлен отдельно в `GOSHA_PLATFORM`:
   - коммит `10bcbf1`, draft PR `https://github.com/MaxCorpOrg/GOSHA_PLATFORM/pull/25`;
   - в Android эту логику не дублировать.
