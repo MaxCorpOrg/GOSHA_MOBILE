@@ -17,6 +17,24 @@ object RobotJsonRpcProxy {
         payload: JSONObject,
         timeoutMs: Long = 8_000,
     ): JSONObject {
+        return when (
+            val run = LocalRobotProbeCoordinator.runFunctionalCommand(
+                source = "RobotJsonRpcProxy.call",
+            ) {
+                callDirect(http, robotWsUrl, payload, timeoutMs)
+            }
+        ) {
+            is LocalRobotProbeRun.Executed -> run.value
+            is LocalRobotProbeRun.Skipped -> throw IOException("local websocket command skipped: ${run.reason}")
+        }
+    }
+
+    private suspend fun callDirect(
+        http: OkHttpClient,
+        robotWsUrl: String,
+        payload: JSONObject,
+        timeoutMs: Long,
+    ): JSONObject {
         val reqId = normalizeId(payload.opt("id"))
             ?: throw IOException("jsonrpc payload missing id")
 
@@ -71,6 +89,24 @@ object RobotJsonRpcProxy {
         robotWsUrl: String,
         payload: JSONObject,
         timeoutMs: Long = 4_000,
+    ) {
+        when (
+            val run = LocalRobotProbeCoordinator.runFunctionalCommand(
+                source = "RobotJsonRpcProxy.notify",
+            ) {
+                notifyDirect(http, robotWsUrl, payload, timeoutMs)
+            }
+        ) {
+            is LocalRobotProbeRun.Executed -> return
+            is LocalRobotProbeRun.Skipped -> throw IOException("local websocket command skipped: ${run.reason}")
+        }
+    }
+
+    private suspend fun notifyDirect(
+        http: OkHttpClient,
+        robotWsUrl: String,
+        payload: JSONObject,
+        timeoutMs: Long,
     ) {
         val done = CompletableDeferred<Unit>()
         val request = Request.Builder().url(robotWsUrl).build()

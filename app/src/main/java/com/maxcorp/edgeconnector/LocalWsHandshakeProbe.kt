@@ -1,59 +1,49 @@
 package com.maxcorp.gosha.mobile
 
-import java.io.BufferedInputStream
-import java.net.InetSocketAddress
-import java.net.Socket
+import kotlinx.coroutines.CancellationException
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import javax.net.SocketFactory
 
 object LocalWsHandshakeProbe {
-    fun isOpen(
+    private val baseClient: OkHttpClient = OkHttpClient.Builder()
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .retryOnConnectionFailure(false)
+        .build()
+
+    suspend fun isOpen(
         socketFactory: SocketFactory?,
         host: String,
         port: Int = 8080,
         path: String = "/ws",
         timeoutMs: Long = 1_500L,
     ): Boolean {
-        val timeout = timeoutMs.coerceAtLeast(100L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        val socket = runCatching {
-            (socketFactory ?: SocketFactory.getDefault()).createSocket() as Socket
-        }.getOrElse {
-            return false
-        }
+        val timeout = timeoutMs.coerceAtLeast(100L).coerceAtMost(Int.MAX_VALUE.toLong())
+        val client = clientFor(socketFactory, timeout)
+        val wsUrl = buildWsUrl(host, port, path)
 
-        return socket.use {
-            runCatching {
-                it.tcpNoDelay = true
-                it.soTimeout = timeout
-                it.connect(InetSocketAddress(host, port), timeout)
-                val request = buildString {
-                    append("GET ")
-                    append(path)
-                    append(" HTTP/1.1\r\n")
-                    append("Host: ")
-                    append(host)
-                    append(':')
-                    append(port)
-                    append("\r\n")
-                    append("Upgrade: websocket\r\n")
-                    append("Connection: Upgrade\r\n")
-                    append("Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n")
-                    append("Sec-WebSocket-Version: 13\r\n\r\n")
-                }
-                val output = it.getOutputStream()
-                output.write(request.toByteArray(Charsets.UTF_8))
-                output.flush()
-                val buffer = ByteArray(1024)
-                val bytes = BufferedInputStream(it.getInputStream()).read(buffer)
-                if (bytes <= 0) {
-                    false
-                } else {
-                    val response = String(buffer, 0, bytes, Charsets.UTF_8)
-                    response.startsWith("HTTP/1.1 101") &&
-                        response.contains("Upgrade: websocket", ignoreCase = true)
-                }
-            }.getOrElse { error ->
-                false
-            }
+        return try {
+            RobotWsProbe.probe(client, wsUrl, timeoutMs = timeout).first
+        } catch (exc: CancellationException) {
+            throw exc
+        } catch (_: Exception) {
+            false
         }
+    }
+
+    private fun clientFor(socketFactory: SocketFactory?, timeoutMs: Long): OkHttpClient {
+        val builder = baseClient.newBuilder()
+            .connectTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(0, TimeUnit.MILLISECONDS)
+        if (socketFactory != null) {
+            builder.socketFactory(socketFactory)
+        }
+        return builder.build()
+    }
+
+    private fun buildWsUrl(host: String, port: Int, path: String): String {
+        val normalizedPath = if (path.startsWith("/")) path else "/$path"
+        return "ws://$host:$port$normalizedPath"
     }
 }

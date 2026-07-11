@@ -202,6 +202,19 @@
    - Финальный `clientDebug` собран и установлен:
      - SHA-256 `d353aafb47491f443c8290f999b6827ef1044077cbb189623fec872655e60ec7`;
      - `testClientDebugUnitTest`, `assembleClientDebug` и `lintClientDebug` завершились успешно.
+   - `2026-07-11` через `AI_OFFICE` закрыт отдельный P0 локальных Android-`WebSocket`-сеансов:
+     - главная задача: `task-20260711T063743Z-p0-android-tecno-li9-gosha-main`;
+     - `LocalRobotProbeCoordinator` исключает параллельные локальные сеансы между экраном, службой и функциональными командами;
+     - служба ведёт состояния `executed / skipped / stale`, счётчики и адаптивный интервал 10–60 секунд;
+     - только `executed + ok=true` может обновлять `mobile_presence`;
+     - `LocalWsHandshakeProbe` использует штатный `OkHttp WebSocket`, корректный close-frame и окно закрытия 1500 мс;
+     - свежий успешный результат службы переиспользуется экраном не дольше 5 секунд, только для совпадающего сохранённого адреса и подсети; это убирает второй WebSocket и гонку ложного `robot not found`;
+     - регрессионные тесты покрывают координатор, ограничение частоты, устаревший кеш, `SocketFactory`, отмену coroutine, close-frame и последовательное подтверждение адресов;
+     - финальный установленный APK совпадает со сборкой, SHA-256 `66e18603d942583506c6d45c1bc4c40b2303ca68f8ce90f880e437c25e6729e4`;
+     - живой прогон после `HOME` длился 234 секунды: PID `25464` не изменился, `ConnectorForegroundService` остался foreground-службой; основной журнал содержит 17 выполненных проверок, все `ok=true`;
+     - панель получила свежий `mobile_presence = home_wifi_local`, `local_host = 192.168.1.159`;
+     - поздний post-check дошёл до `executed=56` без `executed ok=false`;
+     - журналы: `20260711-66e18603-final3-adb-260s.log` и `20260711-66e18603-final3-postcheck.log` в папке задачи AI_OFFICE.
    - основные файлы последней серии этой точки:
      - `app/src/main/java/com/maxcorp/edgeconnector/MainActivity.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/LocalRobotDiscovery.kt`
@@ -213,7 +226,9 @@
      - `app/src/main/res/values/strings.xml`
 6. Следующий приоритет:
    - не использовать отвергнутый общий ограничитель громкости `30`: он сделал подсказку слишком тихой;
-   - первым P0 устранить или ограничить шторм локальных `WebSocket`-подключений Android к роботу и покрыть это измеряемым тестом;
+   - P0 локальных `WebSocket`-подключений Android закрыт кодом, тестами и живой выдержкой;
+   - выполнить ещё два полных цикла `MENU -> портал -> done.html -> MENU`, чтобы получить серию из трёх;
+   - отдельный P1 на границе с платформой: `agent_status.robot_ws_ok` для свежего `skipped` пока читается платформой без учёта `robot_ws_probe_state`; presence защищён, но операторский transport status нужно уточнить отдельной платформенной правкой;
    - затем провести чистую парную диагностику без фоновой нагрузки Android:
      - доказать активный OTA-раздел по загрузочному UART-журналу и `ota.label` из локального `self.get_system_info`;
      - сравнить первую и повторную Wi-Fi-подсказку по `wifi_prompt_diag`;

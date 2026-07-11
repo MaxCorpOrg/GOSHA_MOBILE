@@ -1127,11 +1127,39 @@ class MainActivity : AppCompatActivity() {
             logTag,
             "discoverRobotLocally(subnet=$subnetPrefix, preferred=${preferredHosts.filter { it.isNotBlank() }})"
         )
-        val result = LocalRobotDiscovery.discover(
-            socketFactory = WifiInfoHelper.currentWifiNetwork(this)?.socketFactory,
-            subnetPrefix = subnetPrefix,
-            preferredHosts = preferredHosts
-        )
+        val result = when (
+            val run = LocalRobotProbeCoordinator.runMainActivitySearch(
+                source = "MainActivity.discoverRobotLocally",
+            ) {
+                val freshServiceSuccess = LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
+                    subnetPrefix = subnetPrefix,
+                    preferredHosts = preferredHosts,
+                )
+                if (freshServiceSuccess != null) {
+                    Log.d(
+                        logTag,
+                        "discoverRobotLocally reused service success host=${freshServiceSuccess.host} " +
+                            "source=${freshServiceSuccess.source} ageMs=${freshServiceSuccess.ageMs}"
+                    )
+                    freshServiceSuccess.host to ""
+                } else {
+                    LocalRobotDiscovery.discover(
+                        socketFactory = WifiInfoHelper.currentWifiNetwork(this)?.socketFactory,
+                        subnetPrefix = subnetPrefix,
+                        preferredHosts = preferredHosts
+                    )
+                }
+            }
+        ) {
+            is LocalRobotProbeRun.Executed -> run.value
+            is LocalRobotProbeRun.Skipped -> {
+                Log.d(
+                    logTag,
+                    "discoverRobotLocally skipped: ${run.reason} active=${run.activeSource} retryAfterMs=${run.retryAfterMs}"
+                )
+                null to getString(R.string.diagnostics_local_searching_robot_wifi)
+            }
+        }
         Log.d(
             logTag,
             "discoverRobotLocally result host=${result.first.orEmpty()} detail=${result.second}"

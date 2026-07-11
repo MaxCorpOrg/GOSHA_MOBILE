@@ -2,6 +2,7 @@ package com.maxcorp.gosha.mobile
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -56,19 +57,21 @@ class RobotWsProbeTest {
     }
 
     @Test
-    fun `opened probe returns after close grace when peer does not answer close`() = runBlocking {
+    fun `opened probe waits for delayed close frame before cancel`() = runBlocking {
         val closeObserved = CountDownLatch(1)
         val socketEnded = CountDownLatch(1)
+        val gracefulCloseObserved = AtomicBoolean(false)
         val server = MockWebServer()
         server.enqueue(
             MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                     closeObserved.countDown()
-                    Thread.sleep(750)
+                    Thread.sleep(900)
                     webSocket.close(code, reason)
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    gracefulCloseObserved.set(true)
                     socketEnded.countDown()
                 }
 
@@ -87,8 +90,9 @@ class RobotWsProbeTest {
 
             assertTrue(result.first)
             assertTrue(closeObserved.await(2, TimeUnit.SECONDS))
-            assertTrue("probe exceeded close grace: ${elapsedMs}ms", elapsedMs < 1_500)
+            assertTrue("probe exceeded close grace: ${elapsedMs}ms", elapsedMs < 2_500)
             assertTrue(socketEnded.await(2, TimeUnit.SECONDS))
+            assertTrue("probe cancelled before delayed close frame", gracefulCloseObserved.get())
         } finally {
             server.shutdown()
         }

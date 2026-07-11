@@ -6,8 +6,27 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import javax.net.SocketFactory
+
+internal data class LocalRobotDiscoveryProbeHooks(
+    val isPortOpen: suspend (SocketFactory?, String, Int, Long) -> Boolean,
+    val isWsOpen: suspend (SocketFactory?, String, Long) -> Boolean,
+) {
+    companion object {
+        val REAL = LocalRobotDiscoveryProbeHooks(
+            isPortOpen = { socketFactory, host, port, timeoutMs ->
+                LocalPortProbe.isOpen(socketFactory, host, port, timeoutMs)
+            },
+            isWsOpen = { socketFactory, host, timeoutMs ->
+                LocalWsHandshakeProbe.isOpen(
+                    socketFactory = socketFactory,
+                    host = host,
+                    timeoutMs = timeoutMs,
+                )
+            },
+        )
+    }
+}
 
 object LocalRobotDiscovery {
     private const val DISCOVERY_PARALLELISM = 16
@@ -17,10 +36,11 @@ object LocalRobotDiscovery {
     private const val PREFERRED_WS_PROBE_TIMEOUT_MS = 1_800L
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    suspend fun discover(
+    internal suspend fun discover(
         subnetPrefix: String,
         socketFactory: SocketFactory? = null,
         preferredHosts: List<String> = emptyList(),
+        probeHooks: LocalRobotDiscoveryProbeHooks = LocalRobotDiscoveryProbeHooks.REAL,
     ): Pair<String?, String> = coroutineScope {
         if (subnetPrefix.isBlank()) {
             return@coroutineScope null to "Телефон не подключен к Wi‑Fi"
@@ -41,6 +61,7 @@ object LocalRobotDiscovery {
                     tcpTimeoutMs = PREFERRED_TCP_PROBE_TIMEOUT_MS,
                     wsTimeoutMs = PREFERRED_WS_PROBE_TIMEOUT_MS,
                     skipPortPrefilter = true,
+                    probeHooks = probeHooks,
                 )
             }
             if (ok) {
@@ -57,30 +78,25 @@ object LocalRobotDiscovery {
             val reachable = batch.map { last ->
                 async(worker) {
                     val host = "$subnetPrefix.$last"
-                    if (LocalPortProbe.isOpen(socketFactory, host, 8080, TCP_PROBE_TIMEOUT_MS)) host else null
+                    if (probeHooks.isPortOpen(socketFactory, host, 8080, TCP_PROBE_TIMEOUT_MS)) host else null
                 }
             }
 
             val candidates = reachable.awaitAll().filterNotNull()
-            val confirmed = candidates.map { host ->
-                async(worker) {
-                    if (
-                        probeHost(
-                            socketFactory = socketFactory,
-                            host = host,
-                            tcpTimeoutMs = TCP_PROBE_TIMEOUT_MS,
-                            wsTimeoutMs = WS_PROBE_TIMEOUT_MS,
-                            skipPortPrefilter = false,
-                        )
-                    ) {
-                        host
-                    } else {
-                        null
-                    }
+            for (host in candidates) {
+                val confirmed = withContext(worker) {
+                    probeHost(
+                        socketFactory = socketFactory,
+                        host = host,
+                        tcpTimeoutMs = TCP_PROBE_TIMEOUT_MS,
+                        wsTimeoutMs = WS_PROBE_TIMEOUT_MS,
+                        skipPortPrefilter = false,
+                        probeHooks = probeHooks,
+                    )
                 }
-            }.awaitAll().firstOrNull { !it.isNullOrBlank() }
-            if (!confirmed.isNullOrBlank()) {
-                return@coroutineScope confirmed to ""
+                if (confirmed) {
+                    return@coroutineScope host to ""
+                }
             }
         }
 
@@ -93,6 +109,7 @@ object LocalRobotDiscovery {
         tcpTimeoutMs: Long,
         wsTimeoutMs: Long,
         skipPortPrefilter: Boolean,
+        probeHooks: LocalRobotDiscoveryProbeHooks,
     ): Boolean {
         val factories = buildList {
             add(socketFactory)
@@ -100,16 +117,10 @@ object LocalRobotDiscovery {
         }.distinct()
 
         for (factory in factories) {
-            if (!skipPortPrefilter && !LocalPortProbe.isOpen(factory, host, 8080, tcpTimeoutMs)) {
+            if (!skipPortPrefilter && !probeHooks.isPortOpen(factory, host, 8080, tcpTimeoutMs)) {
                 continue
             }
-            if (
-                LocalWsHandshakeProbe.isOpen(
-                    socketFactory = factory,
-                    host = host,
-                    timeoutMs = wsTimeoutMs,
-                )
-            ) {
+            if (probeHooks.isWsOpen(factory, host, wsTimeoutMs)) {
                 return true
             }
         }
