@@ -136,4 +136,40 @@ class ProvisionCoordinatorTest {
         assertEquals(26, plan.displayTotal)
         assertTrue(plan.shouldCheckPanelAfterDiscovery)
     }
+
+    @Test
+    fun `panel local host completes post portal return check`() {
+        val plan = ProvisionCoordinator.planPanelSignal(
+            RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.CONNECTED_LOCALLY,
+                localHost = " 192.168.1.159 ",
+                localHostHint = "192.168.1.159",
+            )
+        )
+
+        require(plan is ProvisionPanelSignalPlan.CompleteWithLocalHost)
+        assertEquals("192.168.1.159", plan.localHost)
+    }
+
+    @Test
+    fun `panel only signal keeps post portal local discovery running`() {
+        val plan = ProvisionCoordinator.planPanelSignal(
+            RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.CONNECTED_VIA_PANEL,
+                localHostHint = " 192.168.1.159 ",
+            )
+        )
+
+        require(plan is ProvisionPanelSignalPlan.ContinueLocalDiscovery)
+        assertEquals("192.168.1.159", plan.localHostHint)
+    }
+
+    @Test
+    fun `unknown panel signal does not complete post portal check`() {
+        val plan = ProvisionCoordinator.planPanelSignal(
+            RobotConnectivityDecision(type = RobotConnectivityDecisionType.UNKNOWN)
+        )
+
+        assertTrue(plan is ProvisionPanelSignalPlan.NoPanelSignal)
+    }
 }

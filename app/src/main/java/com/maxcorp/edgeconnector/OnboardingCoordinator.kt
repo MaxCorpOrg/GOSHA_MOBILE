@@ -61,6 +61,7 @@ internal enum class ConnectedMenuRoute {
 internal data class ConnectedMenuTransition(
     val route: ConnectedMenuRoute,
     val localHost: String = "",
+    val localHostHint: String = "",
 )
 
 internal object OnboardingCoordinator {
@@ -138,10 +139,12 @@ internal object OnboardingCoordinator {
             RobotConnectivityDecisionType.CONNECTED_LOCALLY -> ConnectedMenuTransition(
                 route = ConnectedMenuRoute.LOCAL_HOST,
                 localHost = decision.localHost,
+                localHostHint = decision.localHostHint,
             )
 
             RobotConnectivityDecisionType.CONNECTED_VIA_PANEL -> ConnectedMenuTransition(
                 route = ConnectedMenuRoute.PANEL_ONLY,
+                localHostHint = decision.localHostHint,
             )
 
             else -> null

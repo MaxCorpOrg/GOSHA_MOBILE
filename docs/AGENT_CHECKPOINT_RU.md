@@ -215,6 +215,15 @@
      - панель получила свежий `mobile_presence = home_wifi_local`, `local_host = 192.168.1.159`;
      - поздний post-check дошёл до `executed=56` без `executed ok=false`;
      - журналы: `20260711-66e18603-final3-adb-260s.log` и `20260711-66e18603-final3-postcheck.log` в папке задачи AI_OFFICE.
+   - `2026-07-11` по задаче `task-20260711T103436Z-2-done-html-14-29-06-wi-fi-14-2` внесена узкая Android-правка после воспроизведения дефекта второго цикла:
+     - если после `done.html` панель уже видит робота, но локальный адрес ещё не подтверждён, Android больше не считает это завершением пост-портального поиска;
+     - `CONNECTED_VIA_PANEL` теперь оставляет цикл возврата активным, запоминает `localHostHint` / `board_ip` и подставляет его в следующие вызовы `discoverRobotLocally(...)`;
+     - после возврата телефона в домашний `Wi‑Fi` приложение делает ограниченные повторные локальные проверки, а не висит в `MENU` с бесконечным текстом про поиск адреса;
+     - после исчерпания попыток показывается конечный честный статус: робот на связи с платформой, локальный адрес не подтверждён;
+     - `CONNECTED_LOCALLY` по-прежнему завершает сценарий сразу, запускает `ConnectorForegroundService` и отправляет `mobile_presence = home_wifi_local`;
+     - внешние raw TCP-проверки и внешние `WebSocket`-сеансы к `:8080` не добавлялись.
+     - локальная проверка пройдена:
+       - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon testClientDebugUnitTest assembleClientDebug lintClientDebug`.
    - основные файлы последней серии этой точки:
      - `app/src/main/java/com/maxcorp/edgeconnector/MainActivity.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/LocalRobotDiscovery.kt`
@@ -222,6 +231,9 @@
      - `app/src/main/java/com/maxcorp/edgeconnector/LocalWsHandshakeProbe.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/RobotWifiConnector.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/WifiInfoHelper.kt`
+     - `app/src/main/java/com/maxcorp/edgeconnector/ProvisionCoordinator.kt`
+     - `app/src/main/java/com/maxcorp/edgeconnector/RobotConnectivityResolver.kt`
+     - `app/src/main/java/com/maxcorp/edgeconnector/OnboardingCoordinator.kt`
      - `app/src/main/res/layout/activity_main.xml`
      - `app/src/main/res/values/strings.xml`
 6. Следующий приоритет:

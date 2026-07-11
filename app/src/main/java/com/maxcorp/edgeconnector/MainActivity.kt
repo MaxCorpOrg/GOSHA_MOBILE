@@ -158,6 +158,11 @@ class MainActivity : AppCompatActivity() {
         val localHost: String?,
     )
 
+    private data class ProvisionPanelState(
+        val panelOnlySeen: Boolean,
+        val localHostHint: String,
+    )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -1528,6 +1533,35 @@ class MainActivity : AppCompatActivity() {
         reportPresenceAsync(MobilePresenceState.NOT_FOUND)
     }
 
+    private fun applyPanelOnlyProvisionFinal(localHostHint: String = "") {
+        awaitingRobotProvision = false
+        pendingRobotWifiConnection = false
+        robotWifiConnectTimeoutJob?.cancel()
+        wifiStepStatusJob?.cancel()
+        wifiStepStatusJob = null
+        cancelMenuStabilization()
+        wifiBackToMenuMode = false
+        val updatedDraft = configStore.loadDraft().copy(
+            robotHost = "",
+            wifiReconnectPending = false,
+            setupCompleted = true,
+        )
+        persistDraft(updatedDraft)
+        tvRobotCheck.text = getString(R.string.wifi_robot_local_address_not_confirmed)
+        tvSuccessMessage.text = getString(R.string.wifi_robot_local_address_not_confirmed)
+        updateLocalDiagnostics(
+            if (localHostHint.isNotBlank()) {
+                getString(R.string.diagnostics_local_platform_only_final_with_hint, localHostHint)
+            } else {
+                getString(R.string.diagnostics_local_platform_only_final)
+            }
+        )
+        diagnosticsPanel = getString(R.string.diagnostics_panel_connected_platform)
+        renderDiagnostics()
+        showMenuWithStatus(getString(R.string.menu_status_platform_local_unconfirmed))
+        stopConnectorService()
+    }
+
     private suspend fun resolveRobotViaPanel(): RobotRuntimeSnapshot? {
         val robotId = configStore.loadDraft().robotId
         if (robotId.isBlank()) {
@@ -1567,6 +1601,14 @@ class MainActivity : AppCompatActivity() {
             statusText = messagePrefix,
             toastText = getString(R.string.wifi_robot_already_connected_toast),
         )
+    }
+
+    private fun provisionPanelSignalPlan(snapshot: RobotRuntimeSnapshot?): ProvisionPanelSignalPlan {
+        val decision = RobotConnectivityResolver.resolve(
+            panelSnapshot = snapshot,
+            robotWifiPrefix = robotWifiPrefix,
+        )
+        return ProvisionCoordinator.planPanelSignal(decision)
     }
 
     private fun visibleRobotDecision(currentSsid: String, nearbyRobotSsid: String): RobotConnectivityDecision {
@@ -1783,6 +1825,10 @@ class MainActivity : AppCompatActivity() {
         robotProvisionCheckJob = uiScope.launch {
             val totalAttempts = 24
             val settleAttempts = 3
+            var provisionPanelState = ProvisionPanelState(
+                panelOnlySeen = false,
+                localHostHint = "",
+            )
             repeat(totalAttempts) { index ->
                 val currentSsid = WifiInfoHelper.currentSsid(this@MainActivity)
                 val subnetPrefix = WifiInfoHelper.currentSubnetPrefix(this@MainActivity)
@@ -1823,13 +1869,35 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     is ProvisionAttemptPlan.WaitForHomeWifi -> {
-                        if (plan.shouldCheckPanel &&
-                            maybeCompleteViaPanel(getString(R.string.wifi_robot_already_connected_panel))
-                        ) {
-                            return@launch
+                        if (plan.shouldCheckPanel) {
+                            when (val panelPlan = provisionPanelSignalPlan(resolveRobotViaPanel())) {
+                                is ProvisionPanelSignalPlan.CompleteWithLocalHost -> {
+                                    maybeHandleRobotFound(
+                                        host = panelPlan.localHost,
+                                        statusText = getString(R.string.wifi_robot_found_network),
+                                        toastText = getString(R.string.wifi_robot_already_connected_toast),
+                                    )
+                                    return@launch
+                                }
+
+                                is ProvisionPanelSignalPlan.ContinueLocalDiscovery -> {
+                                    provisionPanelState = provisionPanelState.copy(
+                                        panelOnlySeen = true,
+                                        localHostHint = panelPlan.localHostHint.ifBlank {
+                                            provisionPanelState.localHostHint
+                                        },
+                                    )
+                                }
+
+                                ProvisionPanelSignalPlan.NoPanelSignal -> Unit
+                            }
                         }
                         updateLocalDiagnostics(getString(R.string.diagnostics_local_wait_home_wifi))
-                        diagnosticsPanel = getString(R.string.diagnostics_panel_skipped_no_internet)
+                        diagnosticsPanel = if (provisionPanelState.panelOnlySeen) {
+                            getString(R.string.diagnostics_panel_connected_platform)
+                        } else {
+                            getString(R.string.diagnostics_panel_skipped_no_internet)
+                        }
                         renderDiagnostics()
                         updateProvisionProgress(getString(R.string.wifi_wait_phone_return))
                         delay(1200)
@@ -1842,8 +1910,26 @@ class MainActivity : AppCompatActivity() {
                             diagnosticsPanel = getString(R.string.diagnostics_waiting)
                             renderDiagnostics()
                             updateProvisionProgress(getString(R.string.loading_body_check))
-                            if (maybeCompleteViaPanel(getString(R.string.wifi_robot_already_connected_panel))) {
-                                return@launch
+                            when (val panelPlan = provisionPanelSignalPlan(resolveRobotViaPanel())) {
+                                is ProvisionPanelSignalPlan.CompleteWithLocalHost -> {
+                                    maybeHandleRobotFound(
+                                        host = panelPlan.localHost,
+                                        statusText = getString(R.string.wifi_robot_found_network),
+                                        toastText = getString(R.string.wifi_robot_already_connected_toast),
+                                    )
+                                    return@launch
+                                }
+
+                                is ProvisionPanelSignalPlan.ContinueLocalDiscovery -> {
+                                    provisionPanelState = provisionPanelState.copy(
+                                        panelOnlySeen = true,
+                                        localHostHint = panelPlan.localHostHint.ifBlank {
+                                            provisionPanelState.localHostHint
+                                        },
+                                    )
+                                }
+
+                                ProvisionPanelSignalPlan.NoPanelSignal -> Unit
                             }
                         }
 
@@ -1880,7 +1966,13 @@ class MainActivity : AppCompatActivity() {
                             )
                         )
                         val draft = configStore.loadDraft()
-                        val (host, _) = discoverRobotLocally(subnetPrefix, listOf(draft.robotHost))
+                        val (host, _) = discoverRobotLocally(
+                            subnetPrefix,
+                            preferredDiscoveryHosts(
+                                draft,
+                                listOf(provisionPanelState.localHostHint),
+                            ),
+                        )
                         if (!host.isNullOrBlank()) {
                             maybeHandleRobotFound(
                                 host = host,
@@ -1889,14 +1981,41 @@ class MainActivity : AppCompatActivity() {
                             )
                             return@launch
                         }
-                        if (plan.shouldCheckPanelAfterDiscovery &&
-                            maybeCompleteViaPanel(getString(R.string.wifi_robot_already_connected_panel))
-                        ) {
-                            return@launch
+                        if (plan.shouldCheckPanelAfterDiscovery) {
+                            when (val panelPlan = provisionPanelSignalPlan(resolveRobotViaPanel())) {
+                                is ProvisionPanelSignalPlan.CompleteWithLocalHost -> {
+                                    maybeHandleRobotFound(
+                                        host = panelPlan.localHost,
+                                        statusText = getString(R.string.wifi_robot_found_network),
+                                        toastText = getString(R.string.wifi_robot_already_connected_toast),
+                                    )
+                                    return@launch
+                                }
+
+                                is ProvisionPanelSignalPlan.ContinueLocalDiscovery -> {
+                                    provisionPanelState = provisionPanelState.copy(
+                                        panelOnlySeen = true,
+                                        localHostHint = panelPlan.localHostHint.ifBlank {
+                                            provisionPanelState.localHostHint
+                                        },
+                                    )
+                                    updateLocalDiagnostics(
+                                        getString(R.string.diagnostics_local_platform_only_retrying)
+                                    )
+                                    diagnosticsPanel = getString(R.string.diagnostics_panel_connected_platform)
+                                    renderDiagnostics()
+                                }
+
+                                ProvisionPanelSignalPlan.NoPanelSignal -> Unit
+                            }
                         }
                         delay(1200)
                     }
                 }
+            }
+            if (provisionPanelState.panelOnlySeen) {
+                applyPanelOnlyProvisionFinal(provisionPanelState.localHostHint)
+                return@launch
             }
             maybeHandleRobotMissing(getString(R.string.wifi_after_portal_not_found))
         }

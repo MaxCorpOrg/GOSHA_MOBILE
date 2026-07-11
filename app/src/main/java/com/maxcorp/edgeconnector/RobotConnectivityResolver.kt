@@ -12,6 +12,7 @@ internal data class RobotConnectivityDecision(
     val type: RobotConnectivityDecisionType,
     val robotSsid: String = "",
     val localHost: String = "",
+    val localHostHint: String = "",
 )
 
 internal object RobotConnectivityResolver {
@@ -57,13 +58,18 @@ internal object RobotConnectivityResolver {
 
         if (panelSnapshot?.connected == true) {
             val localHost = panelSnapshot.localHost.trim()
+            val localHostHint = panelSnapshot.localHostHint.trim()
             if (localHost.isNotBlank()) {
                 return RobotConnectivityDecision(
                     type = RobotConnectivityDecisionType.CONNECTED_LOCALLY,
                     localHost = localHost,
+                    localHostHint = localHostHint,
                 )
             }
-            return RobotConnectivityDecision(type = RobotConnectivityDecisionType.CONNECTED_VIA_PANEL)
+            return RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.CONNECTED_VIA_PANEL,
+                localHostHint = localHostHint,
+            )
         }
 
         return RobotConnectivityDecision(type = RobotConnectivityDecisionType.UNKNOWN)
