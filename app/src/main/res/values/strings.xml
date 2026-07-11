@@ -20,7 +20,7 @@
     <string name="menu_hero_title_vpn_active">VPN мешает проверке</string>
     <string name="menu_hero_title_robot_visible">Робот ждёт подключения</string>
     <string name="menu_hero_title_connected">Робот в сети</string>
-    <string name="menu_hero_title_platform_only">Робот выходит на связь</string>
+    <string name="menu_hero_title_platform_only">Робот на связи с платформой</string>
     <string name="menu_hero_title_missing">Робот не найден</string>
     <string name="diagnostics_title">Диагностика подключения</string>
     <string name="diagnostics_empty">нет</string>
@@ -65,7 +65,7 @@
     <string name="diagnostics_panel_delayed_local_search">панель пока не проверялась: даю роботу время поднять сеть после подключения</string>
     <string name="diagnostics_local_platform_only">локальный адрес ещё не подтверждён; робот уже вышел на связь с платформой</string>
     <string name="diagnostics_panel_connected_host">панель подтверждает локальный адрес робота: %1$s</string>
-    <string name="diagnostics_panel_connected_platform">панель подтверждает, что робот уже на связи с платформой, но локальный адрес ещё не пришёл</string>
+    <string name="diagnostics_panel_connected_platform">панель подтверждает, что робот уже на связи с платформой; локальный адрес не подтверждён</string>
     <string name="diagnostics_local_platform_only_retrying">робот уже на связи с платформой; повторно проверяю локальный адрес в домашней сети</string>
     <string name="diagnostics_local_platform_only_final">локальный адрес не подтвердился после повторных проверок; робот остаётся на связи с платформой</string>
     <string name="diagnostics_local_platform_only_final_with_hint">локальный адрес %1$s не подтвердился после повторных проверок; робот остаётся на связи с платформой</string>
@@ -153,7 +153,7 @@
     <string name="wifi_reconnect_status_checking_saved_host">Сначала быстро проверяю адрес робота %1$s, потом при необходимости сверяю домашнюю сеть и панель.</string>
     <string name="wifi_reconnect_status_checking_network">Быстро проверяю домашнюю сеть и состояние робота в панели.</string>
     <string name="wifi_reconnect_status_found">Робот уже в вашей сети. Можно вернуться в меню или подключить его к новому Wi‑Fi.</string>
-    <string name="wifi_reconnect_status_platform_only">Робот уже вышел на связь с платформой. Локальный адрес ещё уточняется. Можно вернуться в меню или подключить новую сеть.</string>
+    <string name="wifi_reconnect_status_platform_only">Робот на связи с платформой. Локальный адрес не подтверждён. Повторная локальная проверка произойдёт при следующем входе или возобновлении меню. Можно вернуться в меню или подключить новую сеть.</string>
     <string name="wifi_reconnect_status_not_found">Робот сейчас не найден. Если хотите подключить его заново, переведите его в режим Wi‑Fi и нажмите «Подключить робота».</string>
     <string name="wifi_reconnect_status_no_home_wifi">Телефон не в домашнем Wi‑Fi. Подключите его к своей сети, чтобы быстро проверить состояние робота.</string>
     <string name="wifi_reconnect_status_vpn_active">На телефоне активен VPN. Пока он включён, приложение может не видеть робота в домашней сети. Временно выключите VPN и нажмите «Обновить».</string>
@@ -165,8 +165,8 @@
     <string name="wifi_robot_already_connected_panel">Робот уже подключен к домашнему Wi‑Fi</string>
     <string name="wifi_robot_already_connected_toast">Робот уже подключен</string>
     <string name="wifi_robot_hotspot_hidden_normal">Робот уже подключен к домашнему Wi‑Fi. Сеть GOSHA-... больше не видна — это нормально.</string>
-    <string name="wifi_robot_resolving_address">Робот уже подключен к домашнему Wi‑Fi. Адрес уточняется автоматически.</string>
-    <string name="wifi_robot_connected_platform">Робот уже на связи с платформой. Локальный адрес ещё уточняется автоматически.</string>
+    <string name="wifi_robot_resolving_address">Робот на связи с платформой. Локальный адрес не подтверждён. Приложение проверит его снова при следующем открытии главного меню.</string>
+    <string name="wifi_robot_connected_platform">Робот на связи с платформой. Локальный адрес не подтверждён.</string>
     <string name="wifi_robot_local_address_not_confirmed">Робот на связи с платформой, но приложение не подтвердило локальный адрес после повторных проверок.</string>
     <string name="wifi_robot_wait_home_wifi">Робот уже принял настройки и вышел из режима подключения. Теперь верните телефон в домашний Wi‑Fi, чтобы приложение нашло локальный адрес робота.</string>
     <string name="wifi_robot_connected_platform_toast">Робот уже на связи с платформой</string>
@@ -197,8 +197,8 @@
     <string name="menu_status_phone_on_robot_wifi">Телефон сейчас в сети робота %1$s. Можно сразу открыть подключение и выбрать новый Wi‑Fi.</string>
     <string name="menu_status_robot_visible">Рядом видна сеть робота %1$s. Робот не в домашней сети: можно подключить его заново.</string>
     <string name="menu_status_connected_host">Робот в сети и готов к работе. Локальный адрес: %1$s.</string>
-    <string name="menu_status_platform_only">Робот уже вышел на связь. Ищу его локальный адрес в домашней сети...</string>
-    <string name="menu_status_platform_local_unconfirmed">Робот на связи с платформой, но локальный адрес пока не подтвердился. Повторите проверку робота из меню.</string>
+    <string name="menu_status_platform_only">Робот на связи с платформой. Локальный адрес не подтверждён. Приложение проверит его снова при следующем открытии главного меню.</string>
+    <string name="menu_status_platform_local_unconfirmed">Робот на связи с платформой, но локальный адрес не подтвердился после повторных проверок. Приложение проверит его снова при следующем открытии главного меню.</string>
     <string name="menu_status_platform_wait_home_wifi">Робот уже вышел из режима настройки. Теперь подключите телефон обратно к домашнему Wi‑Fi, чтобы приложение завершило локальную проверку.</string>
     <string name="menu_status_robot_missing">Робот сейчас не найден в домашней сети. Если он включён, подождите немного или подключите его к новому Wi‑Fi.</string>
     <string name="menu_status_vpn_active">На телефоне активен VPN. Из‑за этого приложение сейчас не может проверить локальный адрес робота в домашней сети. Временно выключите VPN и повторите проверку.</string>
