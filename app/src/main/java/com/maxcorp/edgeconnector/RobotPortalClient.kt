@@ -99,11 +99,16 @@ object RobotPortalClient {
         body: ByteArray?,
         contentType: String?,
     ): PortalResponse {
-        val candidates = buildList<Network?> {
-            add(RobotWifiConnector.preferredNetwork(context))
-            add(RobotWifiConnector.currentRobotWifiNetwork(context))
-            add(null)
+        val robotCandidates = buildList {
+            RobotWifiConnector.preferredRobotWifiNetwork(context)?.let(::add)
+            RobotWifiConnector.currentRobotWifiNetwork(context)?.let(::add)
         }.distinct()
+        val candidates = buildList<Network?> {
+            addAll(robotCandidates)
+            if (shouldIncludeDefaultNetworkCandidate(url, robotCandidates.isNotEmpty())) {
+                add(null)
+            }
+        }
 
         var lastResponse: PortalResponse? = null
         var lastError: Exception? = null
@@ -129,6 +134,13 @@ object RobotPortalClient {
         }
 
         return lastResponse ?: throw lastError ?: IllegalStateException("No portal route available")
+    }
+
+    internal fun shouldIncludeDefaultNetworkCandidate(
+        url: String,
+        hasRobotNetworkCandidate: Boolean,
+    ): Boolean {
+        return !hasRobotNetworkCandidate || !isRobotPortalUrl(url)
     }
 
     private fun openOnce(
@@ -187,6 +199,11 @@ object RobotPortalClient {
             target.startsWith("/") -> PORTAL_BASE_URL + target
             else -> "$PORTAL_BASE_URL/$target"
         }
+    }
+
+    private fun isRobotPortalUrl(url: String): Boolean {
+        val host = runCatching { URL(url).host.lowercase() }.getOrDefault("")
+        return host == "192.168.4.1" || host == "robot.local"
     }
 
     private fun formEncode(fields: Map<String, String>): String {

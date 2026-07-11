@@ -241,9 +241,17 @@
      - после сворачивания больше чем на три минуты служба сохранила `isForeground=true`, проверки — `executed ok=true`;
      - runtime панели был свежим: `home_wifi_local`, `local_host = 192.168.0.103`, возраст `1` секунда, `connectivity.evidence = local_host`;
      - журнал: `/home/max/AI_OFFICE/local_only/ai-office/logs/manual-20260711-android-cycle3/cycle3-adb.log`, SHA-256 `fca5bb635297d846aee0de32ca9840414674981e067f011913249d23341ca731`.
-   - Остаточные задачи Android после этого прогона:
-     - разобрать первый неуспешный `POST /submit` и запасной маршрут;
-     - сделать действие «Подключить к новому Wi-Fi» заметнее относительно информационной кнопки «Проверить робота».
+   - По задаче `task-20260711T165838Z-android-wi-fi-home-max-ai-office-local-only-ai-o` разобран первый неуспешный `POST /submit`:
+     - запрос в `20:43:06` шёл через сеть робота `candidate=574`, но не получил HTTP-ответ (`code=0`, пустые `type` и `bytes=0`);
+     - последующая попытка `candidate=default` ушла через обычный маршрут телефона с исходным адресом `10.202.109.230`, то есть не могла корректно достучаться до портала `192.168.4.1`;
+     - внесена узкая правка: при наличии сети робота `RobotPortalClient` не использует обычный маршрут телефона для `192.168.4.1` / `robot.local`, но сохраняет его для внешних URL и для случая, когда сеть робота неизвестна;
+     - добавлен unit-тест политики маршрута портала;
+     - статус после отправки настроек стал честнее: приложение ждёт ответ портала или переход к завершению, а не утверждает преждевременно, что настройки уже приняты;
+     - действие `MENU` переподключения переименовано в «Сменить Wi‑Fi робота», поднято выше и оставлено основной кнопкой; информационная кнопка теперь «Статус и диагностика» во вторичном стиле;
+     - локальная проверка пройдена:
+       - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
+   - Остаточный риск Android после этой правки:
+     - новая сборка ещё не проходила живой цикл на устройстве; reviewer должен проверить, что при наличии сети робота после неответившего `POST /submit` нет ухода в `candidate=default`, а повторный успешный `POST` и post-portal поиск не сломаны.
    - Внешний P1 операторской диагностики платформы исправлен отдельно:
      - ветка `hotfix/edge-hub-probe-state`, коммит `10bcbf1`;
      - draft PR `https://github.com/MaxCorpOrg/GOSHA_PLATFORM/pull/25`;
@@ -253,6 +261,7 @@
      - `app/src/main/java/com/maxcorp/edgeconnector/LocalRobotDiscovery.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/LocalPortProbe.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/LocalWsHandshakeProbe.kt`
+     - `app/src/main/java/com/maxcorp/edgeconnector/RobotPortalClient.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/RobotWifiConnector.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/WifiInfoHelper.kt`
      - `app/src/main/java/com/maxcorp/edgeconnector/ProvisionCoordinator.kt`
@@ -260,10 +269,11 @@
      - `app/src/main/java/com/maxcorp/edgeconnector/OnboardingCoordinator.kt`
      - `app/src/main/res/layout/activity_main.xml`
      - `app/src/main/res/values/strings.xml`
+     - `app/src/test/java/com/maxcorp/edgeconnector/RobotPortalClientRoutePolicyTest.kt`
 6. Следующий приоритет:
    - не использовать отвергнутый общий ограничитель громкости `30`: он сделал подсказку слишком тихой;
    - P0 локальных `WebSocket`-подключений Android закрыт кодом, тестами и живой выдержкой;
-   - чистая парная диагностика прошивки и повторный Android-цикл уже подтверждены; следующий Android-приоритет — анализ первого неуспешного `POST /submit` и понятность действия переподключения;
+   - чистая парная диагностика прошивки и повторный Android-цикл уже подтверждены; следующий Android-приоритет — review и живой контроль правки политики маршрута портала;
    - платформенный P1 по `robot_ws_probe_state` подготовлен в PR `#25`; не дублировать его в Android-коде;
    - отдельно исправить правило OEM-подсказки: нажатие `Позже` или простое открытие настроек не должно навсегда скрывать инструкцию до подтверждения режима `Нет ограничений`;
    - сохранять живые логи `HotspotPortal`, `GoshaRobotWifi`, `RobotPortalClient`, `ConnectorForegroundService`, `MaxRobotFlow` и UART прошивки;

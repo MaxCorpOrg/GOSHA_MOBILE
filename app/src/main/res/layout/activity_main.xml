@@ -620,14 +620,24 @@
                     style="@style/TextAppearance.MaxCorp.Body" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnMenuStatus"
+                    android:id="@+id/btnMenuReconnect"
                     style="@style/Widget.MaxCorp.Button.Menu"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
+                    android:text="@string/menu_button_reconnect"
+                    app:icon="@drawable/ic_menu_wifi"
+                    app:iconTint="@color/mc_white" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMenuStatus"
+                    style="@style/Widget.MaxCorp.Button.MenuSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
                     android:text="@string/menu_button_status"
                     app:icon="@drawable/ic_menu_status"
-                    app:iconTint="@color/mc_white" />
+                    app:iconTint="@color/mc_primary" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnMenuCabinet"
@@ -657,16 +667,6 @@
                     android:layout_marginTop="10dp"
                     android:text="@string/menu_button_support"
                     app:icon="@drawable/ic_menu_support"
-                    app:iconTint="@color/mc_white" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnMenuReconnect"
-                    style="@style/Widget.MaxCorp.Button.Menu"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="@string/menu_button_reconnect"
-                    app:icon="@drawable/ic_menu_wifi"
                     app:iconTint="@color/mc_white" />
 
                 <com.google.android.material.button.MaterialButton
