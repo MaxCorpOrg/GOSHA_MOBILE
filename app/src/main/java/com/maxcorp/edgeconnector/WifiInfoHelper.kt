@@ -18,6 +18,14 @@ import java.net.Inet4Address
 object WifiInfoHelper {
     private const val DEFAULT_SCAN_MAX_AGE_MS = 15_000L
 
+    enum class SystemWifiState {
+        Enabled,
+        Enabling,
+        Disabled,
+        Disabling,
+        Unknown,
+    }
+
     @Suppress("DEPRECATION")
     @SuppressLint("MissingPermission")
     fun currentSsid(context: Context): String {
@@ -100,6 +108,19 @@ object WifiInfoHelper {
 
     fun nearbySsidByPrefix(context: Context, prefix: String, maxAgeMs: Long = DEFAULT_SCAN_MAX_AGE_MS): String =
         nearbySsidByPrefixes(context, listOf(prefix), maxAgeMs)
+
+    @Suppress("DEPRECATION")
+    fun systemWifiState(context: Context): SystemWifiState {
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            ?: return SystemWifiState.Unknown
+        return when (wifiManager.wifiState) {
+            WifiManager.WIFI_STATE_ENABLED -> SystemWifiState.Enabled
+            WifiManager.WIFI_STATE_ENABLING -> SystemWifiState.Enabling
+            WifiManager.WIFI_STATE_DISABLED -> SystemWifiState.Disabled
+            WifiManager.WIFI_STATE_DISABLING -> SystemWifiState.Disabling
+            else -> SystemWifiState.Unknown
+        }
+    }
 
     @Suppress("DEPRECATION")
     @SuppressLint("MissingPermission")

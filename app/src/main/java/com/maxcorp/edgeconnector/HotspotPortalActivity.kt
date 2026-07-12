@@ -2,11 +2,18 @@ package com.maxcorp.gosha.mobile
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.net.Uri
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.webkit.ConsoleMessage
@@ -34,7 +41,17 @@ class HotspotPortalActivity : AppCompatActivity() {
     private var provisionCompleted = false
     private var waitForExitAttempts = 0
     private var submissionExitPollAttempts = 0
-    private var robotWifiReconnectInProgress = false
+    private val reconnectPolicy = PortalWifiReconnectPolicy()
+    private val reconnectRetryRunnable = Runnable { requestRobotWifiReconnectIfNeeded() }
+    private var wifiStateReceiverRegistered = false
+    private val wifiStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != WifiManager.WIFI_STATE_CHANGED_ACTION) return
+            handleWifiStateChanged(
+                intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN)
+            )
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -157,6 +174,14 @@ class HotspotPortalActivity : AppCompatActivity() {
     }
 
     private fun loadPortal(resetAttempts: Boolean) {
+        if (provisionSubmitted || provisionCompleted) {
+            cancelScheduledReconnectRetry()
+            tvPortalStatus.text = when {
+                provisionCompleted -> getString(R.string.portal_status_done)
+                else -> getString(R.string.portal_status_submitted)
+            }
+            return
+        }
         if (resetAttempts) {
             reloadAttempts = 0
         }
@@ -165,6 +190,8 @@ class HotspotPortalActivity : AppCompatActivity() {
         provisionCompleted = false
         waitForExitAttempts = 0
         submissionExitPollAttempts = 0
+        reconnectPolicy.onLifecycleReset(currentPolicyWifiState())
+        cancelScheduledReconnectRetry()
         tvPortalStatus.text = getString(R.string.portal_status_opening)
         if (RobotBranding.isRobotWifiSsid(WifiInfoHelper.currentSsid(this), ROBOT_WIFI_PREFIX)) {
             RobotWifiConnector.bindToCurrentRobotWifi(this)
@@ -232,7 +259,8 @@ class HotspotPortalActivity : AppCompatActivity() {
 
     private fun ensureRobotNetworkForPortal(): Boolean {
         if (hasRobotNetworkForPortal()) {
-            robotWifiReconnectInProgress = false
+            reconnectPolicy.onAvailable()
+            cancelScheduledReconnectRetry()
             return true
         }
         requestRobotWifiReconnectIfNeeded()
@@ -262,22 +290,68 @@ class HotspotPortalActivity : AppCompatActivity() {
                 portalCompleted = provisionCompleted,
             )
         ) {
+            reconnectPolicy.onRequestNotStarted()
+            cancelScheduledReconnectRetry()
             return false
         }
         if (hasRobotNetworkForPortal()) {
-            robotWifiReconnectInProgress = false
+            reconnectPolicy.onAvailable()
+            cancelScheduledReconnectRetry()
             return false
         }
-        if (robotWifiReconnectInProgress) {
-            tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
-            return true
-        }
-        if (!RobotWifiConnector.hasRequiredPermissions(this)) {
+
+        val wifiState = currentPolicyWifiState()
+        val decision = reconnectPolicy.requestNeeded(nowMs = elapsedNowMs(), wifiState = wifiState)
+        if (decision.action == PortalWifiReconnectPolicy.Action.StartRequest &&
+            !RobotWifiConnector.hasRequiredPermissions(this)
+        ) {
+            reconnectPolicy.onRequestNotStarted()
+            cancelScheduledReconnectRetry()
             tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
             return true
         }
+        return handleReconnectDecision(decision)
+    }
 
-        robotWifiReconnectInProgress = true
+    private fun handleReconnectDecision(decision: PortalWifiReconnectPolicy.Decision): Boolean {
+        return when (decision.action) {
+            PortalWifiReconnectPolicy.Action.StartRequest -> {
+                startRobotWifiReconnectRequest()
+                true
+            }
+            PortalWifiReconnectPolicy.Action.CoalesceActiveRequest -> {
+                tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
+                true
+            }
+            PortalWifiReconnectPolicy.Action.WaitForWifiEnabled -> {
+                cancelScheduledReconnectRetry()
+                tvPortalStatus.text = getString(R.string.portal_status_wifi_disabled)
+                true
+            }
+            PortalWifiReconnectPolicy.Action.WaitForCooldown -> {
+                scheduleReconnectRetry(decision.retryDelayMs)
+                tvPortalStatus.text = getString(
+                    R.string.portal_status_reconnect_cooldown,
+                    reconnectRetryDelaySeconds(decision.retryDelayMs),
+                )
+                true
+            }
+            PortalWifiReconnectPolicy.Action.BlockedAfterPortalFinished -> {
+                cancelScheduledReconnectRetry()
+                false
+            }
+        }
+    }
+
+    private fun startRobotWifiReconnectRequest() {
+        if (!RobotWifiConnector.hasRequiredPermissions(this)) {
+            reconnectPolicy.onRequestNotStarted()
+            cancelScheduledReconnectRetry()
+            tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
+            return
+        }
+
+        cancelScheduledReconnectRetry()
         tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
         RobotWifiConnector.connect(
             context = this,
@@ -286,7 +360,8 @@ class HotspotPortalActivity : AppCompatActivity() {
                     if (isFinishing || isDestroyed) {
                         return@runOnUiThread
                     }
-                    robotWifiReconnectInProgress = false
+                    reconnectPolicy.onAvailable()
+                    cancelScheduledReconnectRetry()
                     tvPortalStatus.text = getString(R.string.portal_status_reconnected)
                     loadPortalPage(lastPortalUrl)
                 }
@@ -296,9 +371,18 @@ class HotspotPortalActivity : AppCompatActivity() {
                     if (isFinishing || isDestroyed) {
                         return@runOnUiThread
                     }
-                    robotWifiReconnectInProgress = false
                     Log.w(logTag, "Robot Wi-Fi reconnect request failed: $message")
-                    tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
+                    val retryDecision = reconnectPolicy.onUnavailable(
+                        nowMs = elapsedNowMs(),
+                        wifiState = currentPolicyWifiState(),
+                    )
+                    if (retryDecision.action == PortalWifiReconnectPolicy.Action.WaitForCooldown) {
+                        handleReconnectDecision(retryDecision)
+                    } else if (retryDecision.action == PortalWifiReconnectPolicy.Action.WaitForWifiEnabled) {
+                        handleReconnectDecision(retryDecision)
+                    } else {
+                        tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
+                    }
                 }
             },
             onLost = {
@@ -306,13 +390,85 @@ class HotspotPortalActivity : AppCompatActivity() {
                     if (isFinishing || isDestroyed) {
                         return@runOnUiThread
                     }
-                    robotWifiReconnectInProgress = false
+                    reconnectPolicy.onLost(
+                        nowMs = elapsedNowMs(),
+                        wifiState = currentPolicyWifiState(),
+                    )
                     tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
                     requestRobotWifiReconnectIfNeeded()
                 }
             },
         )
-        return true
+    }
+
+    private fun currentPolicyWifiState(): PortalWifiReconnectPolicy.WifiState {
+        return when (WifiInfoHelper.systemWifiState(this)) {
+            WifiInfoHelper.SystemWifiState.Enabled -> PortalWifiReconnectPolicy.WifiState.Enabled
+            WifiInfoHelper.SystemWifiState.Enabling -> PortalWifiReconnectPolicy.WifiState.Enabling
+            WifiInfoHelper.SystemWifiState.Disabled -> PortalWifiReconnectPolicy.WifiState.Disabled
+            WifiInfoHelper.SystemWifiState.Disabling -> PortalWifiReconnectPolicy.WifiState.Disabling
+            WifiInfoHelper.SystemWifiState.Unknown -> PortalWifiReconnectPolicy.WifiState.Unknown
+        }
+    }
+
+    private fun elapsedNowMs(): Long = SystemClock.elapsedRealtime()
+
+    private fun scheduleReconnectRetry(delayMs: Long) {
+        val safeDelayMs = delayMs.coerceAtLeast(MIN_RECONNECT_RETRY_DELAY_MS)
+        mainHandler.removeCallbacks(reconnectRetryRunnable)
+        mainHandler.postDelayed(reconnectRetryRunnable, safeDelayMs)
+    }
+
+    private fun cancelScheduledReconnectRetry() {
+        mainHandler.removeCallbacks(reconnectRetryRunnable)
+    }
+
+    private fun reconnectRetryDelaySeconds(delayMs: Long): Long {
+        return ((delayMs + 999L) / 1000L).coerceAtLeast(1L)
+    }
+
+    private fun registerWifiStateReceiver() {
+        if (wifiStateReceiverRegistered) return
+        val filter = IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(wifiStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(wifiStateReceiver, filter)
+        }
+        wifiStateReceiverRegistered = true
+    }
+
+    private fun unregisterWifiStateReceiver() {
+        if (!wifiStateReceiverRegistered) return
+        runCatching { unregisterReceiver(wifiStateReceiver) }
+        wifiStateReceiverRegistered = false
+    }
+
+    private fun handleWifiStateChanged(wifiState: Int) {
+        if (isFinishing || isDestroyed) return
+        when (wifiState) {
+            WifiManager.WIFI_STATE_ENABLED -> {
+                reconnectPolicy.onWifiEnabled(elapsedNowMs())
+                if (ProvisionCoordinator.shouldReconnectPortalWifi(provisionSubmitted, provisionCompleted)) {
+                    requestRobotWifiReconnectIfNeeded()
+                }
+            }
+            WifiManager.WIFI_STATE_ENABLING -> {
+                cancelScheduledReconnectRetry()
+                if (ProvisionCoordinator.shouldReconnectPortalWifi(provisionSubmitted, provisionCompleted)) {
+                    tvPortalStatus.text = getString(R.string.portal_status_wifi_enabling)
+                }
+            }
+            WifiManager.WIFI_STATE_DISABLED,
+            WifiManager.WIFI_STATE_DISABLING -> {
+                reconnectPolicy.onWifiDisabled()
+                cancelScheduledReconnectRetry()
+                if (ProvisionCoordinator.shouldReconnectPortalWifi(provisionSubmitted, provisionCompleted)) {
+                    tvPortalStatus.text = getString(R.string.portal_status_wifi_disabled)
+                }
+            }
+        }
     }
 
     private fun proxyPortalResource(request: WebResourceRequest): WebResourceResponse? {
@@ -771,6 +927,8 @@ class HotspotPortalActivity : AppCompatActivity() {
         fun onProvisionSubmitted() {
             runOnUiThread {
                 provisionSubmitted = true
+                reconnectPolicy.onPortalSubmitted()
+                cancelScheduledReconnectRetry()
                 setResult(Activity.RESULT_OK)
                 tvPortalStatus.text = getString(R.string.portal_status_submitted)
                 scheduleSubmittedExitPoll(resetAttempts = true)
@@ -783,6 +941,8 @@ class HotspotPortalActivity : AppCompatActivity() {
                 if (provisionCompleted) return@runOnUiThread
                 provisionCompleted = true
                 provisionSubmitted = true
+                reconnectPolicy.onPortalCompleted()
+                cancelScheduledReconnectRetry()
                 setResult(Activity.RESULT_OK)
                 mainHandler.removeCallbacks(submittedExitPollRunnable)
                 tvPortalStatus.text = getString(R.string.portal_status_wait_reboot)
@@ -798,18 +958,38 @@ class HotspotPortalActivity : AppCompatActivity() {
         }
     }
 
-    override fun onDestroy() {
-        mainHandler.removeCallbacksAndMessages(null)
-        RobotWifiConnector.release()
-        webView.destroy()
-        super.onDestroy()
+    override fun onStart() {
+        super.onStart()
+        registerWifiStateReceiver()
+    }
+
+    override fun onStop() {
+        cancelScheduledReconnectRetry()
+        unregisterWifiStateReceiver()
+        super.onStop()
     }
 
     override fun onResume() {
         super.onResume()
         if (provisionSubmitted && !provisionCompleted) {
             scheduleSubmittedExitPoll()
+        } else if (!provisionCompleted) {
+            when (currentPolicyWifiState()) {
+                PortalWifiReconnectPolicy.WifiState.Disabled,
+                PortalWifiReconnectPolicy.WifiState.Disabling -> reconnectPolicy.onWifiDisabled()
+                PortalWifiReconnectPolicy.WifiState.Enabled,
+                PortalWifiReconnectPolicy.WifiState.Enabling,
+                PortalWifiReconnectPolicy.WifiState.Unknown -> Unit
+            }
         }
+    }
+
+    override fun onDestroy() {
+        unregisterWifiStateReceiver()
+        mainHandler.removeCallbacksAndMessages(null)
+        RobotWifiConnector.release()
+        webView.destroy()
+        super.onDestroy()
     }
 
     companion object {
@@ -823,6 +1003,7 @@ class HotspotPortalActivity : AppCompatActivity() {
         private const val RETURN_TIMEOUT_FINISH_DELAY_MS = 1800L
         private const val SUBMITTED_EXIT_POLL_INTERVAL_MS = 1000L
         private const val SUBMITTED_EXIT_POLL_MAX_ATTEMPTS = 45
+        private const val MIN_RECONNECT_RETRY_DELAY_MS = 500L
     }
 
     private fun browserLikeUserAgent(original: String): String {

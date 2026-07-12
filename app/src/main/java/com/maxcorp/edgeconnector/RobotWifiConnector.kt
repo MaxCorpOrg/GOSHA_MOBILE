@@ -19,6 +19,7 @@ object RobotWifiConnector {
     private var activeCallback: ConnectivityManager.NetworkCallback? = null
     private var activeManager: ConnectivityManager? = null
     private var activeNetwork: Network? = null
+    private var requestGeneration = 0L
 
     fun requiredPermissions(): Array<String> {
         val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -66,12 +67,22 @@ object RobotWifiConnector {
                 .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .setNetworkSpecifier(specifier)
                 .build()
+            val generation = nextRequestGeneration()
 
             var deliveredAvailable = false
             val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
+                    val callbackIsActive = activeCallback === this
+                    val requestIsActive = isActiveRequestGeneration(generation)
+                    if (!shouldHandleAvailableCallback(callbackIsActive, requestIsActive)) {
+                        Log.w(
+                            LOG_TAG,
+                            "Ignored stale onAvailable($network) for prefix $prefix, callbackIsActive=$callbackIsActive, requestIsActive=$requestIsActive"
+                        )
+                        return
+                    }
                     deliveredAvailable = true
-                    Log.w(LOG_TAG, "onAvailable($network) for prefix $prefix")
+                    Log.w(LOG_TAG, "onAvailable($network) for prefix $prefix, generation=$generation")
                     activeManager = manager
                     activeCallback = this
                     activeNetwork = network
@@ -84,8 +95,9 @@ object RobotWifiConnector {
 
                 override fun onUnavailable() {
                     val callbackIsActive = activeCallback === this
-                    Log.w(LOG_TAG, "onUnavailable() for prefix $prefix, callbackIsActive=$callbackIsActive")
-                    if (!shouldHandleUnavailableCallback(callbackIsActive)) {
+                    val requestIsActive = isActiveRequestGeneration(generation)
+                    Log.w(LOG_TAG, "onUnavailable() for prefix $prefix, callbackIsActive=$callbackIsActive, requestIsActive=$requestIsActive")
+                    if (!shouldHandleUnavailableCallback(callbackIsActive, requestIsActive)) {
                         return
                     }
                     release()
@@ -94,15 +106,17 @@ object RobotWifiConnector {
 
                 override fun onLost(network: Network) {
                     val callbackIsActive = activeCallback === this
+                    val requestIsActive = isActiveRequestGeneration(generation)
                     val networkIsActive = activeNetwork == network
                     Log.w(
                         LOG_TAG,
-                        "onLost($network), deliveredAvailable=$deliveredAvailable, callbackIsActive=$callbackIsActive, networkIsActive=$networkIsActive, prefix=$prefix",
+                        "onLost($network), deliveredAvailable=$deliveredAvailable, callbackIsActive=$callbackIsActive, requestIsActive=$requestIsActive, networkIsActive=$networkIsActive, prefix=$prefix",
                     )
                     if (
                         !shouldHandleNetworkLoss(
                             deliveredAvailable = deliveredAvailable,
                             callbackIsActive = callbackIsActive,
+                            requestIsActive = requestIsActive,
                             networkIsActive = networkIsActive,
                         )
                     ) {
@@ -133,13 +147,18 @@ object RobotWifiConnector {
     internal fun shouldHandleNetworkLoss(
         deliveredAvailable: Boolean,
         callbackIsActive: Boolean,
+        requestIsActive: Boolean,
         networkIsActive: Boolean,
     ): Boolean {
-        return deliveredAvailable && callbackIsActive && networkIsActive
+        return deliveredAvailable && callbackIsActive && requestIsActive && networkIsActive
     }
 
-    internal fun shouldHandleUnavailableCallback(callbackIsActive: Boolean): Boolean {
-        return callbackIsActive
+    internal fun shouldHandleAvailableCallback(callbackIsActive: Boolean, requestIsActive: Boolean): Boolean {
+        return callbackIsActive && requestIsActive
+    }
+
+    internal fun shouldHandleUnavailableCallback(callbackIsActive: Boolean, requestIsActive: Boolean): Boolean {
+        return callbackIsActive && requestIsActive
     }
 
     fun bindToCurrentRobotWifi(context: Context): Boolean {
@@ -191,6 +210,7 @@ object RobotWifiConnector {
         activeCallback = null
         activeManager = null
         activeNetwork = null
+        invalidateRequestGeneration()
     }
 
     fun preferredNetwork(context: Context): Network? {
@@ -239,6 +259,19 @@ object RobotWifiConnector {
         }
         Log.w(LOG_TAG, "$reason cleared stale robot network $rememberedNetwork")
         release()
+    }
+
+    private fun nextRequestGeneration(): Long {
+        requestGeneration += 1L
+        return requestGeneration
+    }
+
+    private fun invalidateRequestGeneration() {
+        requestGeneration += 1L
+    }
+
+    private fun isActiveRequestGeneration(generation: Long): Boolean {
+        return requestGeneration == generation
     }
 
     private fun findRobotWifiNetwork(manager: ConnectivityManager): Network? {
