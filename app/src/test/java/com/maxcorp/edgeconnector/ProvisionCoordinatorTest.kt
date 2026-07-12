@@ -27,6 +27,40 @@ class ProvisionCoordinatorTest {
     }
 
     @Test
+    fun `return check does not start when portal was closed before submit`() {
+        assertFalse(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = true,
+                robotWifiPortalActive = false,
+                returnCheckRunning = false,
+                portalSubmitted = false,
+            )
+        )
+    }
+
+    @Test
+    fun `portal wifi reconnect stops after submit or completion`() {
+        assertTrue(
+            ProvisionCoordinator.shouldReconnectPortalWifi(
+                portalSubmitted = false,
+                portalCompleted = false,
+            )
+        )
+        assertFalse(
+            ProvisionCoordinator.shouldReconnectPortalWifi(
+                portalSubmitted = true,
+                portalCompleted = false,
+            )
+        )
+        assertFalse(
+            ProvisionCoordinator.shouldReconnectPortalWifi(
+                portalSubmitted = true,
+                portalCompleted = true,
+            )
+        )
+    }
+
+    @Test
     fun `return check does not start twice or outside provisioning`() {
         assertFalse(
             ProvisionCoordinator.shouldStartReturnCheck(

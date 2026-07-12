@@ -38,6 +38,7 @@ object RobotWifiConnector {
         context: Context,
         onConnected: () -> Unit,
         onError: (String) -> Unit,
+        onLost: () -> Unit = {},
     ) {
         Log.w(LOG_TAG, "connect()")
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -82,17 +83,33 @@ object RobotWifiConnector {
                 }
 
                 override fun onUnavailable() {
-                    Log.w(LOG_TAG, "onUnavailable() for prefix $prefix")
+                    val callbackIsActive = activeCallback === this
+                    Log.w(LOG_TAG, "onUnavailable() for prefix $prefix, callbackIsActive=$callbackIsActive")
+                    if (!shouldHandleUnavailableCallback(callbackIsActive)) {
+                        return
+                    }
                     release()
                     tryPrefix(index + 1)
                 }
 
                 override fun onLost(network: Network) {
-                    Log.w(LOG_TAG, "onLost($network), deliveredAvailable=$deliveredAvailable, prefix=$prefix")
-                    if (!deliveredAvailable) {
+                    val callbackIsActive = activeCallback === this
+                    val networkIsActive = activeNetwork == network
+                    Log.w(
+                        LOG_TAG,
+                        "onLost($network), deliveredAvailable=$deliveredAvailable, callbackIsActive=$callbackIsActive, networkIsActive=$networkIsActive, prefix=$prefix",
+                    )
+                    if (
+                        !shouldHandleNetworkLoss(
+                            deliveredAvailable = deliveredAvailable,
+                            callbackIsActive = callbackIsActive,
+                            networkIsActive = networkIsActive,
+                        )
+                    ) {
                         return
                     }
                     release()
+                    onLost()
                 }
             }
 
@@ -113,6 +130,18 @@ object RobotWifiConnector {
         tryPrefix(0)
     }
 
+    internal fun shouldHandleNetworkLoss(
+        deliveredAvailable: Boolean,
+        callbackIsActive: Boolean,
+        networkIsActive: Boolean,
+    ): Boolean {
+        return deliveredAvailable && callbackIsActive && networkIsActive
+    }
+
+    internal fun shouldHandleUnavailableCallback(callbackIsActive: Boolean): Boolean {
+        return callbackIsActive
+    }
+
     fun bindToCurrentRobotWifi(context: Context): Boolean {
         Log.w(LOG_TAG, "bindToCurrentRobotWifi()")
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -120,6 +149,7 @@ object RobotWifiConnector {
         }
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return false
+        clearStaleActiveNetwork(manager, "bindToCurrentRobotWifi")
 
         val requestedRobotNetwork = activeNetwork?.takeIf { network ->
             val ssid = networkSsid(manager, network)
@@ -164,11 +194,12 @@ object RobotWifiConnector {
     }
 
     fun preferredNetwork(context: Context): Network? {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        clearStaleActiveNetwork(manager, "preferredNetwork")
         activeNetwork?.let {
             Log.w(LOG_TAG, "preferredNetwork() using active requested network $it")
             return it
         }
-        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         findRobotWifiNetwork(manager)?.let {
             Log.w(LOG_TAG, "preferredNetwork() discovered robot network $it")
             return it
@@ -180,6 +211,7 @@ object RobotWifiConnector {
 
     fun preferredRobotWifiNetwork(context: Context): Network? {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        clearStaleActiveNetwork(manager, "preferredRobotWifiNetwork")
         activeNetwork?.takeIf { network ->
             isRobotWifiNetwork(manager, network)
         }?.let {
@@ -196,7 +228,17 @@ object RobotWifiConnector {
 
     fun currentRobotWifiNetwork(context: Context): Network? {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        clearStaleActiveNetwork(manager, "currentRobotWifiNetwork")
         return findRobotWifiNetwork(manager)
+    }
+
+    private fun clearStaleActiveNetwork(manager: ConnectivityManager, reason: String) {
+        val rememberedNetwork = activeNetwork ?: return
+        if (isRobotWifiNetwork(manager, rememberedNetwork)) {
+            return
+        }
+        Log.w(LOG_TAG, "$reason cleared stale robot network $rememberedNetwork")
+        release()
     }
 
     private fun findRobotWifiNetwork(manager: ConnectivityManager): Network? {

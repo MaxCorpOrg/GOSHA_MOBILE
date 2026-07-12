@@ -42,8 +42,16 @@ internal object ProvisionCoordinator {
         awaitingRobotProvision: Boolean,
         robotWifiPortalActive: Boolean,
         returnCheckRunning: Boolean,
+        portalSubmitted: Boolean = true,
     ): Boolean {
-        return awaitingRobotProvision && !robotWifiPortalActive && !returnCheckRunning
+        return awaitingRobotProvision && portalSubmitted && !robotWifiPortalActive && !returnCheckRunning
+    }
+
+    fun shouldReconnectPortalWifi(
+        portalSubmitted: Boolean,
+        portalCompleted: Boolean,
+    ): Boolean {
+        return !portalSubmitted && !portalCompleted
     }
 
     fun planAttempt(
