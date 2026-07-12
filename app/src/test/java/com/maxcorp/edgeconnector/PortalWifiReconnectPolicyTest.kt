@@ -120,6 +120,48 @@ class PortalWifiReconnectPolicyTest {
     }
 
     @Test
+    fun `on resume after missed wifi enabled event clears cooldown and requests immediately`() {
+        val policy = testPolicy(initialCooldownMs = 5_000L)
+
+        policy.requestNeeded(nowMs = 0L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled)
+        policy.onUnavailable(nowMs = 100L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled)
+        policy.onWifiDisabled()
+
+        assertEquals(
+            PortalWifiReconnectPolicy.Action.WaitForWifiEnabled,
+            policy.requestNeeded(nowMs = 200L, wifiState = PortalWifiReconnectPolicy.WifiState.Disabled).action,
+        )
+        assertEquals(
+            PortalWifiReconnectPolicy.ResumeDecision(
+                PortalWifiReconnectPolicy.ResumeAction.RequestReconnectIfNeeded,
+                PortalWifiReconnectPolicy.WifiState.Enabled,
+            ),
+            policy.reconcileOnResume(nowMs = 300L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled),
+        )
+        assertEquals(
+            PortalWifiReconnectPolicy.Action.StartRequest,
+            policy.requestNeeded(nowMs = 300L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled).action,
+        )
+    }
+
+    @Test
+    fun `on resume while wifi is enabling also requests immediately`() {
+        val policy = testPolicy(initialCooldownMs = 5_000L)
+
+        policy.requestNeeded(nowMs = 0L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled)
+        policy.onUnavailable(nowMs = 100L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled)
+
+        assertEquals(
+            PortalWifiReconnectPolicy.ResumeAction.RequestReconnectIfNeeded,
+            policy.reconcileOnResume(nowMs = 200L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabling).action,
+        )
+        assertEquals(
+            PortalWifiReconnectPolicy.Action.StartRequest,
+            policy.requestNeeded(nowMs = 200L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabling).action,
+        )
+    }
+
+    @Test
     fun `wifi enabled event keeps active request coalesced`() {
         val policy = testPolicy()
 
@@ -129,6 +171,39 @@ class PortalWifiReconnectPolicyTest {
         assertEquals(
             PortalWifiReconnectPolicy.Action.CoalesceActiveRequest,
             policy.requestNeeded(nowMs = 100L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled).action,
+        )
+    }
+
+    @Test
+    fun `on resume with active request keeps reconnect coalesced`() {
+        val policy = testPolicy()
+
+        policy.requestNeeded(nowMs = 0L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled)
+
+        assertEquals(
+            PortalWifiReconnectPolicy.ResumeAction.RequestReconnectIfNeeded,
+            policy.reconcileOnResume(nowMs = 100L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled).action,
+        )
+        assertEquals(
+            PortalWifiReconnectPolicy.Action.CoalesceActiveRequest,
+            policy.requestNeeded(nowMs = 100L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled).action,
+        )
+    }
+
+    @Test
+    fun `on resume while wifi stays disabled keeps blocked status`() {
+        val policy = testPolicy()
+
+        assertEquals(
+            PortalWifiReconnectPolicy.ResumeDecision(
+                PortalWifiReconnectPolicy.ResumeAction.ShowWifiBlocked,
+                PortalWifiReconnectPolicy.WifiState.Disabling,
+            ),
+            policy.reconcileOnResume(nowMs = 0L, wifiState = PortalWifiReconnectPolicy.WifiState.Disabling),
+        )
+        assertEquals(
+            PortalWifiReconnectPolicy.Action.WaitForWifiEnabled,
+            policy.requestNeeded(nowMs = 0L, wifiState = PortalWifiReconnectPolicy.WifiState.Disabling).action,
         )
     }
 
@@ -148,6 +223,31 @@ class PortalWifiReconnectPolicyTest {
         assertEquals(
             PortalWifiReconnectPolicy.Action.BlockedAfterPortalFinished,
             completedPolicy.requestNeeded(nowMs = 0L, wifiState = PortalWifiReconnectPolicy.WifiState.Enabled).action,
+        )
+    }
+
+    @Test
+    fun `on resume after submit or completed does not request reconnect`() {
+        val submittedPolicy = testPolicy()
+        submittedPolicy.onPortalSubmitted()
+
+        assertEquals(
+            PortalWifiReconnectPolicy.ResumeAction.IgnoreAfterPortalFinished,
+            submittedPolicy.reconcileOnResume(
+                nowMs = 0L,
+                wifiState = PortalWifiReconnectPolicy.WifiState.Enabled,
+            ).action,
+        )
+
+        val completedPolicy = testPolicy()
+        completedPolicy.onPortalCompleted()
+
+        assertEquals(
+            PortalWifiReconnectPolicy.ResumeAction.IgnoreAfterPortalFinished,
+            completedPolicy.reconcileOnResume(
+                nowMs = 0L,
+                wifiState = PortalWifiReconnectPolicy.WifiState.Enabled,
+            ).action,
         )
     }
 

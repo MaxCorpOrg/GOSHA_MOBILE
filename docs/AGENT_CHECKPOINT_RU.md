@@ -292,7 +292,9 @@
    - робот вернулся в `AX3000T-4039` с адресом `192.168.1.159`, приложение осталось в `MENU`, панель получила свежий `home_wifi_local` с `local_host`;
    - после `HOME` больше `218` секунд сохранились PID `19519`, `ConnectorForegroundService` и выполненные успешные проверки робота;
    - установленный APK имеет SHA-256 `2d107ddf596bbbaf1e6eaff680078fa3ef41552bd29cf5bb1f9d4ff9650683d1`;
-   - следующий Android-P2 — ограничить повторные системные запросы сети во время полностью выключенного `Wi‑Fi`; сейчас страница повторяет `/scan` примерно раз в пять секунд;
+   - Android-P2 по повторным системным запросам сети закрыт кодом поверх `1c7aff2`: `HotspotPortalActivity.onResume()` сверяет фактическое состояние `Wi‑Fi`, сбрасывает cooldown при `Enabled/Enabling`, сразу вызывает `requestRobotWifiReconnectIfNeeded()` до `submit/completed`, сохраняет blocked-статус при `Disabled/Disabling` и не дублирует активный запрос;
+   - этот P2 покрыт `PortalWifiReconnectPolicyTest` для сценария `onStop -> Wi‑Fi enabled -> onResume`, `Enabling`, active request и `submitted/completed` guard; локально пройдены `git diff --check` и `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`;
+   - следующий шаг по этому P2 — review и, при необходимости, живое подтверждение на телефоне;
    - не использовать отвергнутый общий ограничитель громкости `30`: он сделал подсказку слишком тихой;
    - P0 локальных `WebSocket`-подключений Android закрыт кодом, тестами и живой выдержкой;
    - чистая парная диагностика прошивки и живой Android-контроль политики маршрута портала подтверждены;

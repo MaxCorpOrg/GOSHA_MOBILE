@@ -380,9 +380,18 @@
   - после чистой фоновой выдержки больше `218` секунд PID `19519` не изменился, `ConnectorForegroundService` сохранил `isForeground=true`, выполненные проверки продолжили давать `ok=true`;
   - Android-журнал: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260712T065630Z-android/live-recovery-validation/android-adb.log`, SHA-256 `46a32c0e8c965dba30893df2394454eaf684d6653e40836d385ac76ecc10e1e9`;
   - UART-журнал: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260712T065630Z-android/live-recovery-validation/robot-uart.log`, SHA-256 `7a0692e9b4702a9e86252dcaf8f050ef85c118df18d9f614d92fe14145ce9318`.
+- `2026-07-12` по fixer-задаче `task-20260712T113152Z-p2-commit-1c7aff2-hotspotportalactivity-on` закрыт review-P2 поверх `1c7aff2`:
+  - `HotspotPortalActivity.onResume()` теперь сверяет фактическое состояние системного `Wi‑Fi`, чтобы не зависеть только от `WIFI_STATE_CHANGED_ACTION`, который мог быть пропущен во время `onStop` или системных настроек;
+  - состояния `Enabled` и `Enabling` сбрасывают cooldown через `PortalWifiReconnectPolicy.onWifiEnabled(...)` и сразу запускают `requestRobotWifiReconnectIfNeeded()`, если портал ещё не отправлен и не завершён;
+  - состояния `Disabled` и `Disabling` сохраняют честный статус ожидания включения `Wi‑Fi`;
+  - активный системный запрос сети не дублируется, а после `submit` или `completed` новый диалог не открывается;
+  - добавлены unit-тесты `PortalWifiReconnectPolicyTest` для сценария `onStop -> Wi‑Fi enabled -> onResume`, `Enabling`, активного запроса и guard после `submit/completed`;
+  - локальная проверка пройдена:
+    - `git diff --check`;
+    - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
 - На текущей точке ещё не подтверждено полностью:
   - живая радиопроверка переходной сети `Xiaozhi-*`;
-  - снижение частоты повторных системных запросов сети при полностью выключенном `Wi‑Fi` телефона;
+  - живая проверка новой защиты от повторных системных запросов сети при выключении и повторном включении `Wi‑Fi` телефона;
   - устойчивость JavaScript страницы прошивки при единичном `code=0` на `/scan`.
 - Голосовые жалобы пользователя сейчас не считаются мобильным дефектом:
   - тембр и разнообразие голоса ограничены серверным `TTS`-движком платформы
@@ -390,7 +399,7 @@
 
 ## Что делать дальше
 
-1. P2 Android: ограничить повторный запуск системного запроса сети, пока `Wi‑Fi` телефона полностью выключен; не допустить навязчивых повторных окон после включения.
+1. P2 Android: провести review и, при необходимости, живую проверку новой защиты от повторных системных запросов сети при выключении и повторном включении `Wi‑Fi`.
 2. P2 Android/прошивка: обработать единичный `code=0` на `/scan` без JavaScript-ошибки страницы; не возвращать `candidate=default`.
 3. P1: отдельно проверить восстановление после временно недоступного робота, не используя внешние raw TCP-проверки и `nc -z` на порту `:8080`.
 4. P1: провести review и слияние платформенного PR `#25` по `robot_ws_probe_state`; не дублировать правку в Android.
