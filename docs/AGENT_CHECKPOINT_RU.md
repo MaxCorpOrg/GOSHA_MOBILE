@@ -292,13 +292,15 @@
    - робот вернулся в `AX3000T-4039` с адресом `192.168.1.159`, приложение осталось в `MENU`, панель получила свежий `home_wifi_local` с `local_host`;
    - после `HOME` больше `218` секунд сохранились PID `19519`, `ConnectorForegroundService` и выполненные успешные проверки робота;
    - установленный APK имеет SHA-256 `2d107ddf596bbbaf1e6eaff680078fa3ef41552bd29cf5bb1f9d4ff9650683d1`;
-   - Android-P2 по повторным системным запросам сети закрыт кодом поверх `1c7aff2`: `HotspotPortalActivity.onResume()` сверяет фактическое состояние `Wi‑Fi`, сбрасывает cooldown при `Enabled/Enabling`, сразу вызывает `requestRobotWifiReconnectIfNeeded()` до `submit/completed`, сохраняет blocked-статус при `Disabled/Disabling` и не дублирует активный запрос;
+   - Android-P2 по повторным системным запросам сети закрыт кодом в канонических коммитах `64d3ce2` и `d2f04fe`: `HotspotPortalActivity.onResume()` сверяет фактическое состояние `Wi‑Fi`, сбрасывает cooldown при `Enabled/Enabling`, сразу вызывает `requestRobotWifiReconnectIfNeeded()` до `submit/completed`, сохраняет blocked-статус при `Disabled/Disabling` и не дублирует активный запрос;
    - этот P2 покрыт `PortalWifiReconnectPolicyTest` для сценария `onStop -> Wi‑Fi enabled -> onResume`, `Enabling`, active request и `submitted/completed` guard; локально пройдены `git diff --check` и `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`;
-   - следующий шаг по этому P2 — review и, при необходимости, живое подтверждение на телефоне;
+   - первичный reviewer нашёл P2 пропущенного `WIFI_STATE_CHANGED_ACTION` во время `onStop`, fixer закрыл его, финальный reviewer не нашёл P0/P1/P2;
+   - канонический прогон `assembleClientDebug testClientDebugUnitTest lintClientDebug` завершился `BUILD SUCCESSFUL in 2m 21s`;
+   - следующий шаг по этому P2 — живое подтверждение на телефоне;
    - не использовать отвергнутый общий ограничитель громкости `30`: он сделал подсказку слишком тихой;
    - P0 локальных `WebSocket`-подключений Android закрыт кодом, тестами и живой выдержкой;
    - чистая парная диагностика прошивки и живой Android-контроль политики маршрута портала подтверждены;
-   - платформенный P1 по `robot_ws_probe_state` подготовлен в PR `#25`; не дублировать его в Android-коде;
+   - платформенный P1 по `robot_ws_probe_state` слит в `GOSHA_PLATFORM` PR `#25`, merge-коммит `ae72eea`; не дублировать его в Android-коде;
    - отдельно исправить правило OEM-подсказки: нажатие `Позже` или простое открытие настроек не должно навсегда скрывать инструкцию до подтверждения режима `Нет ограничений`;
    - сохранять живые логи `HotspotPortal`, `GoshaRobotWifi`, `RobotPortalClient`, `ConnectorForegroundService`, `MaxRobotFlow` и UART прошивки;
 7. Для iOS ближайшая точка продолжения теперь зафиксирована в:

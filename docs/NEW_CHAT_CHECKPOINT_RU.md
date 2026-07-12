@@ -285,13 +285,18 @@
    - `mobile_presence = home_wifi_local` и `local_host = 192.168.1.159` отправлены успешно;
    - PID `19519` и `ConnectorForegroundService` сохранились после фоновой выдержки больше `218` секунд;
    - APK SHA-256 `2d107ddf596bbbaf1e6eaff680078fa3ef41552bd29cf5bb1f9d4ff9650683d1`.
-5. P2 Android по повторным системным запросам сети закрыт кодом поверх `1c7aff2`: `HotspotPortalActivity.onResume()` теперь сверяет фактическое состояние `Wi‑Fi`, сразу восстанавливает запрос сети при `Enabled/Enabling`, сохраняет blocked-статус при `Disabled/Disabling`, не дублирует активный request и не открывает диалог после `submit/completed`; следующий шаг — review и, при необходимости, живое подтверждение на телефоне.
+5. P2 Android по повторным системным запросам сети закрыт кодом и финальным review без P0/P1/P2:
+   - канонические коммиты `64d3ce2` и `d2f04fe`;
+   - `HotspotPortalActivity.onResume()` сверяет фактическое состояние `Wi‑Fi`, сразу восстанавливает запрос при `Enabled/Enabling`, сохраняет blocked-статус при `Disabled/Disabling`, не дублирует активный request и не открывает диалог после `submit/completed`;
+   - stale `onAvailable/onLost/onUnavailable` защищены поколением запроса;
+   - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug` завершён успешно в каноническом worktree за `2m 21s`;
+   - следующий шаг — живое подтверждение на `TECNO LI9`.
 6. Провести чистую аппаратную диагностику:
    - подтвердить активный OTA-раздел по загрузочному UART-журналу;
    - независимо получить `ota.label` через локальный `self.get_system_info`;
    - сравнить первую и повторную Wi-Fi-подсказку по `wifi_prompt_diag`.
 7. Исправить известное ограничение OEM-подсказки: `Позже` или открытие настроек не должно навсегда считаться подтверждением режима `Нет ограничений`.
-8. Платформенный P1 уже подготовлен в PR `#25`; дождаться review и слияния, не переносить его в мобильный клиент.
+8. Платформенный P1 уже слит отдельно в `GOSHA_PLATFORM` PR `#25`, merge-коммит `ae72eea`; не переносить его в мобильный клиент.
 9. Для iOS:
    - перейти в отдельный репозиторий `GOSHA_MOBILE_IOS`;
    - взять совместимый с `Xcode 13.2.1` iPhone/iOS или перейти на более новый Mac/Xcode;
