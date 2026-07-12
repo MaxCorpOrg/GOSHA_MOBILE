@@ -1,6 +1,7 @@
 package com.maxcorp.gosha.mobile
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
@@ -148,6 +149,7 @@ class MainActivity : AppCompatActivity() {
     private var notificationPermissionRequestStarted = false
     private var notificationPermissionRequestPending = false
     private var backgroundAccessDialog: AlertDialog? = null
+    private var robotWifiPortalSubmitted = false
 
     private lateinit var robotWifiPermissionsLauncher: ActivityResultLauncher<Array<String>>
     private lateinit var robotWifiPortalLauncher: ActivityResultLauncher<Intent>
@@ -200,9 +202,15 @@ class MainActivity : AppCompatActivity() {
         }
         robotWifiPortalLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
-        ) {
+        ) { result ->
             robotWifiPortalActive = false
-            Log.d(logTag, "Robot Wi-Fi portal returned; starting post-provision check")
+            robotWifiPortalSubmitted = result.resultCode == Activity.RESULT_OK
+            if (!robotWifiPortalSubmitted) {
+                Log.d(logTag, "Robot Wi-Fi portal returned before submit; opening reconnect step")
+                handleRobotWifiPortalCancelledBeforeSubmit()
+                return@registerForActivityResult
+            }
+            Log.d(logTag, "Robot Wi-Fi portal returned after submit; starting post-provision check")
             maybeContinueProvisionAfterReturn()
         }
         notificationPermissionLauncher = registerForActivityResult(
@@ -1494,6 +1502,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun maybeHandleRobotFound(host: String, statusText: String, toastText: String? = null) {
         awaitingRobotProvision = false
+        robotWifiPortalSubmitted = false
         pendingRobotWifiConnection = false
         robotWifiConnectTimeoutJob?.cancel()
         wifiStepStatusJob?.cancel()
@@ -1516,6 +1525,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun maybeHandleRobotMissing(message: String) {
         awaitingRobotProvision = false
+        robotWifiPortalSubmitted = false
         pendingRobotWifiConnection = false
         robotWifiConnectTimeoutJob?.cancel()
         wifiStepStatusJob?.cancel()
@@ -1535,6 +1545,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun applyPanelOnlyProvisionFinal(localHostHint: String = "") {
         awaitingRobotProvision = false
+        robotWifiPortalSubmitted = false
         pendingRobotWifiConnection = false
         robotWifiConnectTimeoutJob?.cancel()
         wifiStepStatusJob?.cancel()
@@ -1777,6 +1788,18 @@ class MainActivity : AppCompatActivity() {
         refreshWifiReconnectStatus()
     }
 
+    private fun handleRobotWifiPortalCancelledBeforeSubmit() {
+        if (!awaitingRobotProvision) {
+            return
+        }
+        RobotWifiConnector.release()
+        openWifiReconnectStep(
+            message = getString(R.string.wifi_reconnect_hint),
+            localDiagnostics = getString(R.string.diagnostics_local_reconnect_pending),
+            panelDiagnosticsText = getString(R.string.diagnostics_panel_skipped_reconnect_pending),
+        )
+    }
+
     private suspend fun findVisibleRobotSsid(attempts: Int = 3, delayMs: Long = 1200L): String {
         repeat(attempts) { index ->
             val currentSsid = WifiInfoHelper.currentSsid(this)
@@ -1808,6 +1831,7 @@ class MainActivity : AppCompatActivity() {
             awaitingRobotProvision = awaitingRobotProvision,
             robotWifiPortalActive = robotWifiPortalActive,
             returnCheckRunning = robotProvisionCheckJob?.isActive == true,
+            portalSubmitted = robotWifiPortalSubmitted,
         )
         if (!shouldStartReturnCheck) {
             if (robotWifiPortalActive) {
@@ -2140,6 +2164,7 @@ class MainActivity : AppCompatActivity() {
     private fun startRobotWifiPortal() {
         Log.d(logTag, "startRobotWifiPortal()")
         awaitingRobotProvision = true
+        robotWifiPortalSubmitted = false
         pendingRobotWifiConnection = false
         robotWifiConnectTimeoutJob?.cancel()
         wifiStepStatusJob?.cancel()
@@ -2609,6 +2634,7 @@ class MainActivity : AppCompatActivity() {
         val draft = configStore.loadDraft()
         persistDraft(draft.copy(robotHost = "", wifiReconnectPending = true))
         awaitingRobotProvision = false
+        robotWifiPortalSubmitted = false
         pendingRobotWifiConnection = false
         robotWifiConnectTimeoutJob?.cancel()
         robotProvisionCheckJob?.cancel()

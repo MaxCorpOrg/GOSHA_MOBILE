@@ -16,10 +16,20 @@ class RobotPortalClientRoutePolicyTest {
     }
 
     @Test
-    fun `robot portal keeps default route when robot network is unknown`() {
-        assertTrue(
+    fun `robot portal skips default route even when robot network is unknown`() {
+        assertFalse(
             RobotPortalClient.shouldIncludeDefaultNetworkCandidate(
                 url = "http://192.168.4.1/submit",
+                hasRobotNetworkCandidate = false,
+            )
+        )
+    }
+
+    @Test
+    fun `robot local alias skips default route even when robot network is unknown`() {
+        assertFalse(
+            RobotPortalClient.shouldIncludeDefaultNetworkCandidate(
+                url = "http://robot.local/scan",
                 hasRobotNetworkCandidate = false,
             )
         )
@@ -31,6 +41,16 @@ class RobotPortalClientRoutePolicyTest {
             RobotPortalClient.shouldIncludeDefaultNetworkCandidate(
                 url = "http://151.241.228.232:18876/api/mobile/robots/gosha-main/runtime",
                 hasRobotNetworkCandidate = true,
+            )
+        )
+    }
+
+    @Test
+    fun `external url keeps default route when robot network is unknown`() {
+        assertTrue(
+            RobotPortalClient.shouldIncludeDefaultNetworkCandidate(
+                url = "http://151.241.228.232:18876/api/mobile/robots/gosha-main/runtime",
+                hasRobotNetworkCandidate = false,
             )
         )
     }

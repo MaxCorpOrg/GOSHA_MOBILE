@@ -136,11 +136,12 @@ object RobotPortalClient {
         return lastResponse ?: throw lastError ?: IllegalStateException("No portal route available")
     }
 
+    @Suppress("UNUSED_PARAMETER")
     internal fun shouldIncludeDefaultNetworkCandidate(
         url: String,
         hasRobotNetworkCandidate: Boolean,
     ): Boolean {
-        return !hasRobotNetworkCandidate || !isRobotPortalUrl(url)
+        return !isRobotPortalUrl(url)
     }
 
     private fun openOnce(

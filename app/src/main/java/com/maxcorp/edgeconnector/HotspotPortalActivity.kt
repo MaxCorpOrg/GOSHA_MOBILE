@@ -1,6 +1,7 @@
 package com.maxcorp.gosha.mobile
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -33,10 +34,12 @@ class HotspotPortalActivity : AppCompatActivity() {
     private var provisionCompleted = false
     private var waitForExitAttempts = 0
     private var submissionExitPollAttempts = 0
+    private var robotWifiReconnectInProgress = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setResult(Activity.RESULT_CANCELED)
         setContentView(R.layout.activity_hotspot_portal)
 
         tvPortalStatus = findViewById(R.id.tvPortalStatus)
@@ -182,6 +185,9 @@ class HotspotPortalActivity : AppCompatActivity() {
 
     private fun loadPortalPage(targetUrl: String) {
         lastPortalUrl = targetUrl
+        if (!ensureRobotNetworkForPortal()) {
+            return
+        }
         tvPortalStatus.text = when {
             provisionCompleted -> getString(R.string.portal_status_done)
             provisionSubmitted -> getString(R.string.portal_status_submitted)
@@ -201,7 +207,9 @@ class HotspotPortalActivity : AppCompatActivity() {
                     )
                     val body = response.bodyText()
                     if (response.code !in 200..299 || body.isBlank()) {
-                        retryLoad()
+                        if (!requestRobotWifiReconnectIfNeeded()) {
+                            retryLoad()
+                        }
                         return@onSuccess
                     }
                     lastPortalUrl = response.url
@@ -214,10 +222,97 @@ class HotspotPortalActivity : AppCompatActivity() {
                     )
                 }.onFailure { error ->
                     Log.w(logTag, "Failed to load portal page $targetUrl: ${error.message}", error)
-                    retryLoad()
+                    if (!requestRobotWifiReconnectIfNeeded()) {
+                        retryLoad()
+                    }
                 }
             }
         }.start()
+    }
+
+    private fun ensureRobotNetworkForPortal(): Boolean {
+        if (hasRobotNetworkForPortal()) {
+            robotWifiReconnectInProgress = false
+            return true
+        }
+        requestRobotWifiReconnectIfNeeded()
+        return false
+    }
+
+    private fun hasRobotNetworkForPortal(): Boolean {
+        val currentSsid = WifiInfoHelper.currentSsid(this)
+        if (RobotBranding.isRobotWifiSsid(currentSsid, ROBOT_WIFI_PREFIX)) {
+            if (RobotWifiConnector.bindToCurrentRobotWifi(this)) {
+                return true
+            }
+        }
+        return RobotWifiConnector.preferredRobotWifiNetwork(this) != null
+    }
+
+    private fun requestRobotWifiReconnectIfNeeded(): Boolean {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { requestRobotWifiReconnectIfNeeded() }
+            return true
+        }
+        if (
+            isFinishing ||
+            isDestroyed ||
+            !ProvisionCoordinator.shouldReconnectPortalWifi(
+                portalSubmitted = provisionSubmitted,
+                portalCompleted = provisionCompleted,
+            )
+        ) {
+            return false
+        }
+        if (hasRobotNetworkForPortal()) {
+            robotWifiReconnectInProgress = false
+            return false
+        }
+        if (robotWifiReconnectInProgress) {
+            tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
+            return true
+        }
+        if (!RobotWifiConnector.hasRequiredPermissions(this)) {
+            tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
+            return true
+        }
+
+        robotWifiReconnectInProgress = true
+        tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
+        RobotWifiConnector.connect(
+            context = this,
+            onConnected = {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        return@runOnUiThread
+                    }
+                    robotWifiReconnectInProgress = false
+                    tvPortalStatus.text = getString(R.string.portal_status_reconnected)
+                    loadPortalPage(lastPortalUrl)
+                }
+            },
+            onError = { message ->
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        return@runOnUiThread
+                    }
+                    robotWifiReconnectInProgress = false
+                    Log.w(logTag, "Robot Wi-Fi reconnect request failed: $message")
+                    tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
+                }
+            },
+            onLost = {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        return@runOnUiThread
+                    }
+                    robotWifiReconnectInProgress = false
+                    tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
+                    requestRobotWifiReconnectIfNeeded()
+                }
+            },
+        )
+        return true
     }
 
     private fun proxyPortalResource(request: WebResourceRequest): WebResourceResponse? {
@@ -241,6 +336,7 @@ class HotspotPortalActivity : AppCompatActivity() {
             )
         } catch (error: Exception) {
             Log.w(logTag, "Failed to proxy portal resource ${request.url}: ${error.message}", error)
+            requestRobotWifiReconnectIfNeeded()
             null
         }
     }
@@ -619,6 +715,7 @@ class HotspotPortalActivity : AppCompatActivity() {
                     .toString()
             } catch (error: Exception) {
                 Log.w(logTag, "Portal bridge request failed for $method $url: ${error.message}", error)
+                requestRobotWifiReconnectIfNeeded()
                 JSONObject()
                     .put("success", false)
                     .put("error", error.message ?: "unknown error")
@@ -662,7 +759,9 @@ class HotspotPortalActivity : AppCompatActivity() {
                         )
                     }.onFailure { error ->
                         Log.w(logTag, "Portal form submit failed for $method $url: ${error.message}", error)
-                        tvPortalStatus.text = getString(R.string.portal_status_error)
+                        if (!requestRobotWifiReconnectIfNeeded()) {
+                            tvPortalStatus.text = getString(R.string.portal_status_error)
+                        }
                     }
                 }
             }.start()
@@ -672,6 +771,7 @@ class HotspotPortalActivity : AppCompatActivity() {
         fun onProvisionSubmitted() {
             runOnUiThread {
                 provisionSubmitted = true
+                setResult(Activity.RESULT_OK)
                 tvPortalStatus.text = getString(R.string.portal_status_submitted)
                 scheduleSubmittedExitPoll(resetAttempts = true)
             }
@@ -683,6 +783,7 @@ class HotspotPortalActivity : AppCompatActivity() {
                 if (provisionCompleted) return@runOnUiThread
                 provisionCompleted = true
                 provisionSubmitted = true
+                setResult(Activity.RESULT_OK)
                 mainHandler.removeCallbacks(submittedExitPollRunnable)
                 tvPortalStatus.text = getString(R.string.portal_status_wait_reboot)
                 waitForExitAttempts = 0

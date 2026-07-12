@@ -257,6 +257,14 @@
      - телефон вернулся в `4G-CPE-1884`, робот найден по `192.168.0.103`, `MENU` и свежий `home_wifi_local` восстановились;
      - Android-P1 запасного маршрута закрыт; причина первого `code=0` требует следующего прогона с заранее включённым UART прошивки;
      - журнал `/home/max/AI_OFFICE/local_only/ai-office/logs/manual-20260711-portal-route-fix-live/portal-route-fix-adb.log`, SHA-256 `0836673d4d4cab3aa8ec8405b11bf5e50057c43bf547e05d4062def1129d815c`.
+   - `2026-07-12` по задаче `task-20260712T065931Z-gosha-mobile-home-max-worktrees-gosha-mobile-portal-featu` внесена Android-правка восстановления портала после ручного выключения/включения `Wi‑Fi` телефона:
+     - потерянный `Network` робота сбрасывается при следующем обращении к `RobotWifiConnector`;
+     - `HotspotPortalActivity` при потере маршрута к `192.168.4.1` показывает статус переподключения и заново запускает системный запрос сети `GOSHA-*` / `Xiaozhi-*`;
+     - `RobotPortalClient` больше никогда не добавляет `candidate=default` для `192.168.4.1` и `robot.local`;
+     - выход назад до отправки формы возвращает пользователя в шаг повторного подключения, а не запускает пост-портальный поиск;
+     - добавлены регрессионные unit-тесты политики маршрута и отмены портала до отправки;
+     - локальная проверка пройдена:
+       - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
    - Внешний P1 операторской диагностики платформы исправлен отдельно:
      - ветка `hotfix/edge-hub-probe-state`, коммит `10bcbf1`;
      - draft PR `https://github.com/MaxCorpOrg/GOSHA_PLATFORM/pull/25`;
@@ -274,8 +282,11 @@
      - `app/src/main/java/com/maxcorp/edgeconnector/OnboardingCoordinator.kt`
      - `app/src/main/res/layout/activity_main.xml`
      - `app/src/main/res/values/strings.xml`
+     - `app/src/main/java/com/maxcorp/edgeconnector/HotspotPortalActivity.kt`
      - `app/src/test/java/com/maxcorp/edgeconnector/RobotPortalClientRoutePolicyTest.kt`
+     - `app/src/test/java/com/maxcorp/edgeconnector/ProvisionCoordinatorTest.kt`
 6. Следующий приоритет:
+   - передать правку `2026-07-12` на независимый reviewer и затем живьём проверить ручное выключение/включение `Wi‑Fi` телефона внутри локального портала;
    - не использовать отвергнутый общий ограничитель громкости `30`: он сделал подсказку слишком тихой;
    - P0 локальных `WebSocket`-подключений Android закрыт кодом, тестами и живой выдержкой;
    - чистая парная диагностика прошивки и повторный Android-цикл уже подтверждены; следующий Android-приоритет — review и живой контроль правки политики маршрута портала;
