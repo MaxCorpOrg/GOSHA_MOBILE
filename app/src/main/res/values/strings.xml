@@ -279,6 +279,9 @@
     <string name="portal_status_opened">Страница робота открыта. Выберите для робота домашний Wi‑Fi 2.4 GHz и нажмите подключение.</string>
     <string name="portal_status_reconnecting_wifi">Сеть робота потеряна. Снова прошу Android подключиться к GOSHA-...</string>
     <string name="portal_status_reconnected">Сеть робота снова подключена. Открываю страницу робота...</string>
+    <string name="portal_status_wifi_disabled">Wi‑Fi телефона выключен. Включите Wi‑Fi, и приложение сразу снова запросит сеть GOSHA-...</string>
+    <string name="portal_status_wifi_enabling">Wi‑Fi телефона включается. Когда Android подтвердит включение, приложение снова запросит сеть GOSHA-...</string>
+    <string name="portal_status_reconnect_cooldown">Сеть робота пока не подключилась. Повторю запрос через %1$d с, если Wi‑Fi включён.</string>
     <string name="portal_status_reconnect_failed">Сеть робота пока недоступна. Включите Wi‑Fi телефона, выберите GOSHA-... в системном запросе или нажмите «Обновить».</string>
     <string name="portal_status_submitted">Запрос отправлен роботу. Жду ответ портала или переход к завершению...</string>
     <string name="portal_status_done">Робот принял настройки. Возвращаю в приложение...</string>
