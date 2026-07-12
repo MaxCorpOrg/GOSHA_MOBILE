@@ -973,14 +973,21 @@ class HotspotPortalActivity : AppCompatActivity() {
         super.onResume()
         if (provisionSubmitted && !provisionCompleted) {
             scheduleSubmittedExitPoll()
-        } else if (!provisionCompleted) {
-            when (currentPolicyWifiState()) {
-                PortalWifiReconnectPolicy.WifiState.Disabled,
-                PortalWifiReconnectPolicy.WifiState.Disabling -> reconnectPolicy.onWifiDisabled()
-                PortalWifiReconnectPolicy.WifiState.Enabled,
-                PortalWifiReconnectPolicy.WifiState.Enabling,
-                PortalWifiReconnectPolicy.WifiState.Unknown -> Unit
+            return
+        }
+        if (provisionCompleted) {
+            return
+        }
+
+        when (reconnectPolicy.reconcileOnResume(elapsedNowMs(), currentPolicyWifiState()).action) {
+            PortalWifiReconnectPolicy.ResumeAction.RequestReconnectIfNeeded ->
+                requestRobotWifiReconnectIfNeeded()
+            PortalWifiReconnectPolicy.ResumeAction.ShowWifiBlocked -> {
+                cancelScheduledReconnectRetry()
+                tvPortalStatus.text = getString(R.string.portal_status_wifi_disabled)
             }
+            PortalWifiReconnectPolicy.ResumeAction.IgnoreAfterPortalFinished ->
+                cancelScheduledReconnectRetry()
         }
     }
 

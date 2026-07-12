@@ -20,9 +20,20 @@ class PortalWifiReconnectPolicy(
         BlockedAfterPortalFinished,
     }
 
+    enum class ResumeAction {
+        RequestReconnectIfNeeded,
+        ShowWifiBlocked,
+        IgnoreAfterPortalFinished,
+    }
+
     data class Decision(
         val action: Action,
         val retryDelayMs: Long = 0L,
+    )
+
+    data class ResumeDecision(
+        val action: ResumeAction,
+        val wifiState: WifiState,
     )
 
     private var activeRequest = false
@@ -87,18 +98,39 @@ class PortalWifiReconnectPolicy(
         activeRequest = false
     }
 
-    fun onWifiEnabled(nowMs: Long) {
-        wifiState = WifiState.Enabled
+    fun onWifiEnabled(nowMs: Long, wifiState: WifiState = WifiState.Enabled) {
+        this.wifiState = wifiState
         if (!activeRequest) {
             failedAttempts = 0
             nextAllowedRequestAtMs = nowMs
         }
     }
 
-    fun onWifiDisabled() {
-        wifiState = WifiState.Disabled
+    fun onWifiDisabled(wifiState: WifiState = WifiState.Disabled) {
+        this.wifiState = wifiState
         activeRequest = false
         nextAllowedRequestAtMs = 0L
+    }
+
+    fun reconcileOnResume(nowMs: Long, wifiState: WifiState): ResumeDecision {
+        if (portalSubmitted || portalCompleted) {
+            activeRequest = false
+            this.wifiState = wifiState
+            return ResumeDecision(ResumeAction.IgnoreAfterPortalFinished, wifiState)
+        }
+        return when (wifiState) {
+            WifiState.Enabled,
+            WifiState.Enabling -> {
+                onWifiEnabled(nowMs = nowMs, wifiState = wifiState)
+                ResumeDecision(ResumeAction.RequestReconnectIfNeeded, wifiState)
+            }
+            WifiState.Disabled,
+            WifiState.Disabling -> {
+                onWifiDisabled(wifiState)
+                ResumeDecision(ResumeAction.ShowWifiBlocked, wifiState)
+            }
+            WifiState.Unknown -> ResumeDecision(ResumeAction.RequestReconnectIfNeeded, wifiState)
+        }
     }
 
     fun onPortalSubmitted() {
@@ -132,7 +164,7 @@ class PortalWifiReconnectPolicy(
     }
 
     private val WifiState.canRequestNetwork: Boolean
-        get() = this == WifiState.Enabled || this == WifiState.Unknown
+        get() = this == WifiState.Enabled || this == WifiState.Enabling || this == WifiState.Unknown
 
     companion object {
         private const val DEFAULT_INITIAL_COOLDOWN_MS = 5_000L
