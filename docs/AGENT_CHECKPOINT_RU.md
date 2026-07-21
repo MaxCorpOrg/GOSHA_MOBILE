@@ -6,6 +6,18 @@
 
 ## Текущая рабочая точка
 
+- Каноническое Android-дерево для текущего контура:
+  - `/home/max/worktrees/gosha/mobile-portal`
+  - ветка `feature/mobile-hotspot-portal`
+- `2026-07-21` на `TECNO LI9` и `gosha-main` живьём закрыт P2 повторных системных запросов сети:
+  - полный путь `MENU -> портал -> done.html -> MENU` завершён без повторного диалога приложения и без отката назад;
+  - панель подтвердила свежий `home_wifi_local` и `local_host = 192.168.1.159`;
+  - после `HOME` в течение `213` секунд сохранились PID `25698`, `ConnectorForegroundService isForeground=true`, успешные выполненные проверки робота и свежая фоновая запись панели;
+  - продуктовый код менять не потребовалось;
+  - журнал: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260721T100653Z-android-wi-fi-p2-tecno-li9-gosha-main/live-validation/android-adb.log`;
+  - SHA-256 журнала: `ca1629784a6406a5573483ccdbac3423aa2f2df933f4c8feca4d14cb73c11e8a`;
+  - обезличенный снимок панели и `dumpsys`: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260721T100653Z-android-wi-fi-p2-tecno-li9-gosha-main/live-validation/acceptance-evidence.json`, SHA-256 `b64b46ecf98330b1df865b14ec58e65c5a9a5b17f6255b8a95460e8e45745fdd`;
+  - независимый `reviewer` AI_OFFICE не нашёл P0/P1/P2 и рекомендовал `checkpoint`.
 - Для репозитория уже настроен удалённый `origin`:
   - `git@github.com:MaxCorpOrg/GOSHA_MOBILE.git`
 - Ветка `main` уже отправлена в GitHub и отслеживает:
@@ -296,11 +308,13 @@
    - этот P2 покрыт `PortalWifiReconnectPolicyTest` для сценария `onStop -> Wi‑Fi enabled -> onResume`, `Enabling`, active request и `submitted/completed` guard; локально пройдены `git diff --check` и `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`;
    - первичный reviewer нашёл P2 пропущенного `WIFI_STATE_CHANGED_ACTION` во время `onStop`, fixer закрыл его, финальный reviewer не нашёл P0/P1/P2;
    - канонический прогон `assembleClientDebug testClientDebugUnitTest lintClientDebug` завершился `BUILD SUCCESSFUL in 2m 21s`;
-   - следующий шаг по этому P2 — живое подтверждение на телефоне;
+   - живое подтверждение этого P2 завершено `2026-07-21`: новый диалог после `submit` не появился, возврат в `MENU`, панель и фоновая служба подтверждены;
    - не использовать отвергнутый общий ограничитель громкости `30`: он сделал подсказку слишком тихой;
    - P0 локальных `WebSocket`-подключений Android закрыт кодом, тестами и живой выдержкой;
    - чистая парная диагностика прошивки и живой Android-контроль политики маршрута портала подтверждены;
    - платформенный P1 по `robot_ws_probe_state` слит в `GOSHA_PLATFORM` PR `#25`, merge-коммит `ae72eea`; не дублировать его в Android-коде;
+   - следующий основной Android-приоритет — восстановление без полного перезапуска после временной потери домашнего Wi-Fi или недоступности робота;
+   - затем обработать единичный `code=0` на `/scan` без JavaScript-ошибки и без возврата `candidate=default`;
    - отдельно исправить правило OEM-подсказки: нажатие `Позже` или простое открытие настроек не должно навсегда скрывать инструкцию до подтверждения режима `Нет ограничений`;
    - сохранять живые логи `HotspotPortal`, `GoshaRobotWifi`, `RobotPortalClient`, `ConnectorForegroundService`, `MaxRobotFlow` и UART прошивки;
 7. Для iOS ближайшая точка продолжения теперь зафиксирована в:
