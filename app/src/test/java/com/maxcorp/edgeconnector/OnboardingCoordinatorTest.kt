@@ -50,6 +50,34 @@ class OnboardingCoordinatorTest {
     }
 
     @Test
+    fun `menu visibility stays quiet after setup is completed`() {
+        val transition = OnboardingCoordinator.menuVisibility(
+            decision = RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.PHONE_ON_ROBOT_WIFI,
+                robotSsid = "GOSHA-A-5B09",
+            ),
+            setupCompleted = true,
+        )
+
+        assertNull(transition)
+    }
+
+    @Test
+    fun `menu visibility can still open reconnect before setup is completed`() {
+        val transition = OnboardingCoordinator.menuVisibility(
+            decision = RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.ROBOT_VISIBLE_NEARBY,
+                robotSsid = "GOSHA-A-5B09",
+            ),
+            setupCompleted = false,
+        )
+
+        requireNotNull(transition)
+        assertEquals(WifiInstructionMode.RECONNECT, transition.instructionMode)
+        assertEquals(WifiMessageKind.ROBOT_VISIBLE_NEARBY, transition.messageKind)
+    }
+
+    @Test
     fun `connected local host opens menu with local route`() {
         val transition = OnboardingCoordinator.connectedMenu(
             RobotConnectivityDecision(

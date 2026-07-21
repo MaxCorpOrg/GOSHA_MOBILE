@@ -7,9 +7,11 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -24,19 +26,25 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class ConnectorForegroundService : Service() {
+    private val logTag = "ConnectorService"
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
         .build()
+    private val panelHttpClient: OkHttpClient = httpClient.newBuilder()
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(3, TimeUnit.SECONDS)
+        .writeTimeout(3, TimeUnit.SECONDS)
+        .callTimeout(4, TimeUnit.SECONDS)
+        .build()
 
     private lateinit var configStore: ConfigStore
     private lateinit var notificationManager: NotificationManager
 
     private var connectorJob = SupervisorJob()
-    @Volatile private var lastRobotWsOk: Boolean? = null
-    @Volatile private var lastRobotWsError: String = ""
+    private val robotWsProbeTracker = ServiceRobotWsProbeTracker()
     @Volatile private var lastConnectorState: String = "idle"
 
     override fun onCreate() {
@@ -44,7 +52,15 @@ class ConnectorForegroundService : Service() {
         configStore = ConfigStore(this)
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Инициализация"))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification("Инициализация"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification("Инициализация"))
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -79,8 +95,15 @@ class ConnectorForegroundService : Service() {
         connectorJob.cancel()
         connectorJob = SupervisorJob()
         serviceScope.launch(connectorJob) {
+            runPanelPresenceLoop(config)
+        }
+        serviceScope.launch(connectorJob) {
             runConnectorLoop(config)
         }
+    }
+
+    private fun localRobotHttpClient(): OkHttpClient {
+        return WifiBoundHttp.forCurrentWifi(this, httpClient)
     }
 
     private suspend fun runConnectorLoop(config: ConnectorConfig) {
@@ -128,6 +151,17 @@ class ConnectorForegroundService : Service() {
         }
     }
 
+    private suspend fun runPanelPresenceLoop(config: ConnectorConfig) {
+        while (serviceScope.isActive && connectorJob.isActive) {
+            try {
+                refreshPanelPresence(config)
+            } catch (exc: Exception) {
+                Log.w(logTag, "Presence refresh failed: ${exc.message}")
+            }
+            delay(PANEL_PRESENCE_REFRESH_INTERVAL_MS)
+        }
+    }
+
     private suspend fun handleHubMessage(raw: String, hub: HubSocket, config: ConnectorConfig) {
         val msg = try {
             JSONObject(raw)
@@ -149,7 +183,7 @@ class ConnectorForegroundService : Service() {
             "mcp_notify" -> {
                 val payload = msg.optJSONObject("payload") ?: return
                 try {
-                    RobotJsonRpcProxy.notify(httpClient, config.robotWsUrl(), payload)
+                    RobotJsonRpcProxy.notify(localRobotHttpClient(), config.robotWsUrl(), payload)
                     setRobotWsState(true, "")
                 } catch (exc: Exception) {
                     publishStatus("notify->robot failed: ${exc.message}")
@@ -162,7 +196,7 @@ class ConnectorForegroundService : Service() {
                 val bridgeId = msg.optString("bridge_id")
                 val payload = msg.optJSONObject("payload") ?: return
                 val responsePayload = try {
-                    RobotJsonRpcProxy.call(httpClient, config.robotWsUrl(), payload).also {
+                    RobotJsonRpcProxy.call(localRobotHttpClient(), config.robotWsUrl(), payload).also {
                         setRobotWsState(true, "")
                     }
                 } catch (exc: Exception) {
@@ -181,14 +215,26 @@ class ConnectorForegroundService : Service() {
     }
 
     private suspend fun publishAgentStatus(hub: HubSocket, config: ConnectorConfig) {
-        val (ok, error) = RobotWsProbe.probe(httpClient, config.robotWsUrl())
-        setRobotWsState(ok, error)
+        val probe = probeRobotWs(config)
+        runCatching {
+            refreshPanelPresence(config, probe)
+        }.onFailure { exc ->
+            Log.w(logTag, "Panel presence refresh failed during agent status: ${exc.message}")
+        }
 
         val status = JSONObject()
             .put("connector_status", lastConnectorState)
             .put("robot_ws_url", config.robotWsUrl())
-            .put("robot_ws_ok", ok)
-            .put("robot_ws_error", error)
+            .put("robot_ws_ok", probe.ok)
+            .put("robot_ws_error", probe.error)
+            .put("robot_ws_probe_state", probe.state.wireValue)
+            .put("robot_ws_probe_active_source", probe.activeSource)
+            .put("robot_ws_probe_retry_after_ms", probe.retryAfterMs)
+            .put("robot_ws_probe_cached_age_ms", probe.cachedAgeMs ?: JSONObject.NULL)
+            .put("robot_ws_probe_executed_count", probe.executedCount)
+            .put("robot_ws_probe_skipped_count", probe.skippedCount)
+            .put("robot_ws_probe_stale_count", probe.staleCount)
+            .put("robot_ws_probe_min_interval_ms", probe.serviceMinIntervalMs)
             .put("updated_at", System.currentTimeMillis() / 1000)
 
         hub.send(
@@ -200,9 +246,74 @@ class ConnectorForegroundService : Service() {
         )
     }
 
-    private fun setRobotWsState(ok: Boolean?, error: String) {
-        lastRobotWsOk = ok
-        lastRobotWsError = error
+    private suspend fun probeRobotWs(config: ConnectorConfig): ServiceRobotWsProbeResult {
+        val result = when (
+            val run = LocalRobotProbeCoordinator.runServiceProbe(
+                source = SERVICE_PROBE_SOURCE,
+                minIntervalMs = robotWsProbeTracker.serviceMinIntervalMs(),
+            ) {
+                RobotWsProbe.probe(localRobotHttpClient(), config.robotWsUrl()).also { probe ->
+                    if (probe.first) {
+                        LocalRobotProbeCoordinator.recordSuccessfulServiceHost(
+                            host = config.robotHost,
+                            source = SERVICE_PROBE_SOURCE,
+                        )
+                    }
+                }
+            }
+        ) {
+            is LocalRobotProbeRun.Executed -> {
+                val (ok, error) = run.value
+                robotWsProbeTracker.recordExecuted(ok, error, System.currentTimeMillis())
+            }
+            is LocalRobotProbeRun.Skipped -> {
+                robotWsProbeTracker.recordSkipped(run, System.currentTimeMillis())
+            }
+        }
+
+        Log.d(
+            logTag,
+            "Robot WS probe state=${result.state.wireValue} ok=${result.ok} active=${result.activeSource} " +
+                "retryAfterMs=${result.retryAfterMs} cachedAgeMs=${result.cachedAgeMs} " +
+                "executed=${result.executedCount} skipped=${result.skippedCount} stale=${result.staleCount} " +
+                "minIntervalMs=${result.serviceMinIntervalMs}"
+        )
+        return result
+    }
+
+    private suspend fun refreshPanelPresence(
+        config: ConnectorConfig,
+        probeResult: ServiceRobotWsProbeResult? = null,
+    ) {
+        val probe = probeResult ?: run {
+            probeRobotWs(config)
+        }
+        if (!probe.canPublishPresence) {
+            Log.d(
+                logTag,
+                "Panel presence skipped: probeState=${probe.state.wireValue} ok=${probe.ok} cachedAgeMs=${probe.cachedAgeMs}"
+            )
+            return
+        }
+
+        val draft = configStore.loadDraft()
+        if (draft.robotId != config.robotId) {
+            return
+        }
+
+        PanelApiClient.updateMobilePresence(
+            http = panelHttpClient,
+            baseUrl = draft.panelBaseUrl,
+            robotId = config.robotId,
+            state = MobilePresenceState.HOME_WIFI_LOCAL,
+            localHost = config.robotHost,
+            panelClientToken = draft.panelClientToken,
+            onboardingCode = draft.onboardingCode,
+        )
+    }
+
+    private fun setRobotWsState(ok: Boolean, error: String) {
+        robotWsProbeTracker.recordExternalObservation(ok, error, System.currentTimeMillis())
     }
 
     private fun setConnectorState(state: String) {
@@ -280,6 +391,8 @@ class ConnectorForegroundService : Service() {
 
         private const val CHANNEL_ID = "maxcorp_connector_channel"
         private const val NOTIFICATION_ID = 91101
+        private const val PANEL_PRESENCE_REFRESH_INTERVAL_MS = 20_000L
+        private const val SERVICE_PROBE_SOURCE = "ConnectorForegroundService.probeRobotWs"
 
         fun startIntent(context: Context, config: ConnectorConfig): Intent {
             return config.toIntent(Intent(context, ConnectorForegroundService::class.java).apply {

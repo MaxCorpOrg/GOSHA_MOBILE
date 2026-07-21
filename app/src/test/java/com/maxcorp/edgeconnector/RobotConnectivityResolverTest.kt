@@ -48,22 +48,32 @@ class RobotConnectivityResolverTest {
     @Test
     fun `local panel host resolves to local connection`() {
         val decision = RobotConnectivityResolver.resolve(
-            panelSnapshot = panelSnapshot(connected = true, localHost = "192.168.0.103"),
+            panelSnapshot = panelSnapshot(
+                connected = true,
+                localHost = "192.168.0.103",
+                localHostHint = "192.168.0.103",
+            ),
             robotWifiPrefix = robotWifiPrefix,
         )
 
         assertEquals(RobotConnectivityDecisionType.CONNECTED_LOCALLY, decision.type)
         assertEquals("192.168.0.103", decision.localHost)
+        assertEquals("192.168.0.103", decision.localHostHint)
     }
 
     @Test
-    fun `cloud panel connection resolves to panel route when local host is absent`() {
+    fun `cloud panel connection keeps local host hint when local host is absent`() {
         val decision = RobotConnectivityResolver.resolve(
-            panelSnapshot = panelSnapshot(connected = true, localHost = ""),
+            panelSnapshot = panelSnapshot(
+                connected = true,
+                localHost = "",
+                localHostHint = "192.168.1.159",
+            ),
             robotWifiPrefix = robotWifiPrefix,
         )
 
         assertEquals(RobotConnectivityDecisionType.CONNECTED_VIA_PANEL, decision.type)
+        assertEquals("192.168.1.159", decision.localHostHint)
     }
 
     @Test
@@ -76,6 +86,7 @@ class RobotConnectivityResolverTest {
     private fun panelSnapshot(
         connected: Boolean,
         localHost: String,
+        localHostHint: String = localHost,
     ) = RobotRuntimeSnapshot(
         robotId = "jarvis-01",
         connected = connected,
@@ -83,6 +94,7 @@ class RobotConnectivityResolverTest {
         transportState = "reachable",
         target = "",
         localHost = localHost,
+        localHostHint = localHostHint,
         connectivityEvidence = "",
         verifiedNow = false,
         freshDeviceContact = false,
