@@ -77,6 +77,36 @@ class RobotConnectivityResolverTest {
     }
 
     @Test
+    fun `panel local host remains only a hint without direct verification`() {
+        val decision = RobotConnectivityResolver.resolveVerifiedReachability(
+            panelSnapshot = panelSnapshot(
+                connected = true,
+                localHost = "192.168.0.103",
+                localHostHint = "",
+            ),
+            verifiedLocalHost = "",
+        )
+
+        assertEquals(RobotConnectivityDecisionType.CONNECTED_VIA_PANEL, decision.type)
+        assertEquals("", decision.localHost)
+        assertEquals("192.168.0.103", decision.localHostHint)
+    }
+
+    @Test
+    fun `directly verified host confirms local connection`() {
+        val decision = RobotConnectivityResolver.resolveVerifiedReachability(
+            panelSnapshot = panelSnapshot(
+                connected = true,
+                localHost = "192.168.0.103",
+            ),
+            verifiedLocalHost = "192.168.0.104",
+        )
+
+        assertEquals(RobotConnectivityDecisionType.CONNECTED_LOCALLY, decision.type)
+        assertEquals("192.168.0.104", decision.localHost)
+    }
+
+    @Test
     fun `returns unknown when no connection signals are present`() {
         val decision = RobotConnectivityResolver.resolve(robotWifiPrefix = robotWifiPrefix)
 

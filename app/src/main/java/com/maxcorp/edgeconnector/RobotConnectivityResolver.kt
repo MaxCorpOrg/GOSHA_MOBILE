@@ -16,6 +16,30 @@ internal data class RobotConnectivityDecision(
 )
 
 internal object RobotConnectivityResolver {
+    fun resolveVerifiedReachability(
+        panelSnapshot: RobotRuntimeSnapshot?,
+        verifiedLocalHost: String,
+    ): RobotConnectivityDecision {
+        val normalizedVerifiedHost = verifiedLocalHost.trim()
+        val panelLocalHost = panelSnapshot?.localHost.orEmpty().trim()
+        val panelLocalHostHint = panelSnapshot?.localHostHint.orEmpty().trim().ifBlank { panelLocalHost }
+
+        if (normalizedVerifiedHost.isNotBlank()) {
+            return RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.CONNECTED_LOCALLY,
+                localHost = normalizedVerifiedHost,
+                localHostHint = panelLocalHostHint,
+            )
+        }
+        if (panelSnapshot?.connected == true) {
+            return RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.CONNECTED_VIA_PANEL,
+                localHostHint = panelLocalHostHint,
+            )
+        }
+        return RobotConnectivityDecision(type = RobotConnectivityDecisionType.UNKNOWN)
+    }
+
     fun visibleRobotSsid(
         currentSsid: String,
         nearbyRobotSsid: String,
