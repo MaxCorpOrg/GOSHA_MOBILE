@@ -39,6 +39,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
+import org.json.JSONObject
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
@@ -66,6 +68,7 @@ class MainActivity : AppCompatActivity() {
         .build()
 
     private lateinit var configStore: ConfigStore
+    private lateinit var runtimeEventReporter: RuntimeEventReporter
     private lateinit var rootScrollView: ScrollView
     private lateinit var rootContent: View
 
@@ -145,6 +148,7 @@ class MainActivity : AppCompatActivity() {
     private var diagnosticsPanel = ""
     private var diagnosticsDecision = ""
     private var lastPresenceSignature = ""
+    private var wifiRecoveryCorrelationId = ""
     private var pendingRobotWifiPermissionPurpose: PermissionRequestPurpose? = null
     private var notificationPermissionRequestStarted = false
     private var notificationPermissionRequestPending = false
@@ -170,6 +174,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         configStore = ConfigStore(this)
+        runtimeEventReporter = RuntimeEventReporter(this, presenceHttpClient)
         robotWifiPermissionsLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { permissions ->
@@ -965,6 +970,13 @@ class MainActivity : AppCompatActivity() {
         Log.d(
             logTag,
             "maybeReactToWifiChange($previousSsid -> $currentSsid, nearby=$previousNearbyRobotSsid -> $currentNearbyRobotSsid, step=$currentStep, awaiting=$awaitingRobotProvision, watcher=$fromWatcher)"
+        )
+        reportNetworkTransitionAsync(
+            draft = draft,
+            previousSsid = previousSsid,
+            currentSsid = currentSsid,
+            visibilityDecision = visibilityDecision,
+            fromWatcher = fromWatcher,
         )
 
         val visibilityTransition = when (currentStep) {
@@ -2471,6 +2483,9 @@ class MainActivity : AppCompatActivity() {
                     localHost = normalizedHost,
                     panelClientToken = draft.panelClientToken,
                     onboardingCode = draft.onboardingCode,
+                    sourceId = runtimeEventReporter.sourceId,
+                    instanceId = runtimeEventReporter.sessionId,
+                    appVersion = BuildConfig.VERSION_NAME,
                 )
                 lastPresenceSignature = signature
                 Log.d(
@@ -2478,8 +2493,101 @@ class MainActivity : AppCompatActivity() {
                     "reportPresenceAsync success: state=${state.wireValue} localHost=$normalizedHost"
                 )
             } catch (exc: Exception) {
+                runtimeEventReporter.publish(
+                    RuntimeEventTarget(
+                        baseUrl = panelBaseUrl(),
+                        robotId = draft.robotId,
+                        panelClientToken = draft.panelClientToken,
+                        onboardingCode = draft.onboardingCode,
+                    ),
+                    runtimeEventReporter.event(
+                        eventType = "mobile.presence.publish_failed",
+                        severity = "warning",
+                        state = JSONObject()
+                            .put("domain", "presence")
+                            .put("name", state.wireValue)
+                            .put("status", "delivery_pending"),
+                        link = JSONObject()
+                            .put("kind", "mobile_platform")
+                            .put("status", "unavailable"),
+                        error = JSONObject()
+                            .put("code", "presence_delivery_failed")
+                            .put("message", "Событие мобильного присутствия ожидает повторной отправки")
+                            .put("retryable", true),
+                    ),
+                )
                 Log.w(logTag, "reportPresenceAsync failed: ${exc.message}")
             }
+        }
+    }
+
+    private fun reportNetworkTransitionAsync(
+        draft: OnboardingDraft,
+        previousSsid: String,
+        currentSsid: String,
+        visibilityDecision: RobotConnectivityDecision,
+        fromWatcher: Boolean,
+    ) {
+        if (draft.robotId.isBlank()) return
+        val networkLost = previousSsid.isNotBlank() && currentSsid.isBlank()
+        val networkRecovered = previousSsid.isBlank() && currentSsid.isNotBlank()
+        if (networkLost && wifiRecoveryCorrelationId.isBlank()) {
+            wifiRecoveryCorrelationId = "wifi-recovery-${UUID.randomUUID()}"
+        }
+        val correlationId = wifiRecoveryCorrelationId
+        val taskStatus = when {
+            networkLost -> "running"
+            networkRecovered && correlationId.isNotBlank() -> "completed"
+            else -> "observing"
+        }
+        val linkStatus = when (visibilityDecision.type) {
+            RobotConnectivityDecisionType.PHONE_ON_ROBOT_WIFI -> "available"
+            RobotConnectivityDecisionType.ROBOT_VISIBLE_NEARBY -> "degraded"
+            else -> "unknown"
+        }
+        uiScope.launch {
+            runtimeEventReporter.publish(
+                RuntimeEventTarget(
+                    baseUrl = panelBaseUrl(),
+                    robotId = draft.robotId,
+                    panelClientToken = draft.panelClientToken,
+                    onboardingCode = draft.onboardingCode,
+                ),
+                runtimeEventReporter.event(
+                    eventType = "mobile.network.state_changed",
+                    severity = if (networkLost) "warning" else "info",
+                    state = JSONObject()
+                        .put("domain", "connectivity")
+                        .put("name", "wifi")
+                        .put("status", if (currentSsid.isBlank()) "unavailable" else "available"),
+                    link = JSONObject()
+                        .put("kind", "mobile_robot")
+                        .put("status", linkStatus),
+                    task = if (correlationId.isBlank()) {
+                        null
+                    } else {
+                        JSONObject()
+                            .put("id", correlationId)
+                            .put("kind", "wifi_recovery")
+                            .put("status", taskStatus)
+                    },
+                    error = if (networkLost) {
+                        JSONObject()
+                            .put("code", "wifi_temporarily_unavailable")
+                            .put("message", "Wi-Fi временно недоступен; запущено автоматическое восстановление")
+                            .put("retryable", true)
+                    } else {
+                        null
+                    },
+                    attributes = JSONObject()
+                        .put("trigger", if (fromWatcher) "wifi_watcher" else "activity_resume")
+                        .put("robot_visible", visibilityDecision.type != RobotConnectivityDecisionType.UNKNOWN),
+                    correlationId = correlationId,
+                ),
+            )
+        }
+        if (networkRecovered && correlationId.isNotBlank()) {
+            wifiRecoveryCorrelationId = ""
         }
     }
 

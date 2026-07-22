@@ -13,6 +13,11 @@ import java.net.URI
 
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
+internal class PanelHttpException(
+    val statusCode: Int,
+    message: String,
+) : IOException(message)
+
 data class PlanOption(
     val code: String,
     val name: String,
@@ -434,18 +439,46 @@ object PanelApiClient {
         localHost: String = "",
         panelClientToken: String = "",
         onboardingCode: String = "",
+        sourceId: String = "",
+        instanceId: String = "",
+        appVersion: String = "",
     ): JSONObject = withContext(Dispatchers.IO) {
         val root = requestJson(
             http,
             normalizeBaseUrl(baseUrl) + "/api/mobile/robots/${robotId}/presence",
             "POST",
-            buildMobilePresencePayload(state, localHost),
+            buildMobilePresencePayload(state, localHost).apply {
+                if (sourceId.isNotBlank()) put("source_id", sourceId)
+                if (instanceId.isNotBlank()) put("instance_id", instanceId)
+                if (appVersion.isNotBlank()) put("app_version", appVersion)
+            },
             mobileHeaders(panelClientToken, onboardingCode),
         )
         if (!root.optBoolean("ok", false)) {
             throw IOException(root.optString("error", "Не удалось передать локальный статус робота"))
         }
         root.optJSONObject("snapshot") ?: JSONObject()
+    }
+
+    suspend fun publishRuntimeEvent(
+        http: OkHttpClient,
+        baseUrl: String,
+        robotId: String,
+        event: JSONObject,
+        panelClientToken: String = "",
+        onboardingCode: String = "",
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val root = requestJson(
+            http,
+            normalizeBaseUrl(baseUrl) + "/api/mobile/robots/${robotId}/events",
+            "POST",
+            event,
+            mobileHeaders(panelClientToken, onboardingCode),
+        )
+        if (!root.optBoolean("ok", false)) {
+            throw IOException(root.optString("error", "Не удалось передать событие состояния"))
+        }
+        root
     }
 
     internal fun parseRobotRuntimeSnapshot(item: JSONObject, robotId: String): RobotRuntimeSnapshot {
@@ -717,7 +750,10 @@ object PanelApiClient {
         http.newCall(builder.build()).execute().use { resp ->
             val raw = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                throw IOException(if (raw.isNotBlank()) raw else "HTTP ${resp.code}")
+                throw PanelHttpException(
+                    statusCode = resp.code,
+                    message = if (raw.isNotBlank()) raw else "HTTP ${resp.code}",
+                )
             }
             return if (raw.isBlank()) JSONObject() else JSONObject(raw)
         }

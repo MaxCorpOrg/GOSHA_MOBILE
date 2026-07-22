@@ -42,14 +42,17 @@ class ConnectorForegroundService : Service() {
 
     private lateinit var configStore: ConfigStore
     private lateinit var notificationManager: NotificationManager
+    private lateinit var runtimeEventReporter: RuntimeEventReporter
 
     private var connectorJob = SupervisorJob()
     private val robotWsProbeTracker = ServiceRobotWsProbeTracker()
     @Volatile private var lastConnectorState: String = "idle"
+    @Volatile private var lastRuntimeProbeSignature: String = ""
 
     override fun onCreate() {
         super.onCreate()
         configStore = ConfigStore(this)
+        runtimeEventReporter = RuntimeEventReporter(this, panelHttpClient)
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -309,7 +312,55 @@ class ConnectorForegroundService : Service() {
             localHost = config.robotHost,
             panelClientToken = draft.panelClientToken,
             onboardingCode = draft.onboardingCode,
+            sourceId = runtimeEventReporter.sourceId,
+            instanceId = runtimeEventReporter.sessionId,
+            appVersion = BuildConfig.VERSION_NAME,
         )
+        val target = RuntimeEventTarget(
+            baseUrl = draft.panelBaseUrl,
+            robotId = config.robotId,
+            panelClientToken = draft.panelClientToken,
+            onboardingCode = draft.onboardingCode,
+        )
+        val runtimeSignature = listOf(
+            probe.ok,
+            probe.state.wireValue,
+            lastConnectorState,
+        ).joinToString("|")
+        if (runtimeSignature != lastRuntimeProbeSignature) {
+            runtimeEventReporter.publish(
+                target,
+                runtimeEventReporter.event(
+                    eventType = "mobile.robot_link.changed",
+                    severity = if (probe.ok) "info" else "warning",
+                    state = JSONObject()
+                        .put("domain", "connector")
+                        .put("name", lastConnectorState)
+                        .put("status", if (probe.ok) "ready" else "degraded"),
+                    link = JSONObject()
+                        .put("kind", "mobile_robot")
+                        .put("status", if (probe.ok) "available" else "unavailable"),
+                    error = if (probe.ok) {
+                        null
+                    } else {
+                        JSONObject()
+                            .put("code", "robot_probe_failed")
+                            .put("message", "Локальная проверка робота не выполнена")
+                            .put("retryable", true)
+                    },
+                    metrics = JSONObject()
+                        .put("probe_executed_count", probe.executedCount)
+                        .put("probe_skipped_count", probe.skippedCount)
+                        .put("probe_stale_count", probe.staleCount),
+                    attributes = JSONObject()
+                        .put("probe_state", probe.state.wireValue)
+                        .put("active_source", probe.activeSource),
+                ),
+            )
+            lastRuntimeProbeSignature = runtimeSignature
+        } else {
+            runtimeEventReporter.flush(target)
+        }
     }
 
     private fun setRobotWsState(ok: Boolean, error: String) {

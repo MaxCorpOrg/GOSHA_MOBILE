@@ -1,11 +1,65 @@
 package com.maxcorp.gosha.mobile
 
+import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.json.JSONObject
+import org.json.JSONArray
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PanelApiClientTest {
+    @Test
+    fun `runtime outbox drops only permanently invalid events`() {
+        assertTrue(isPermanentRuntimeEventRejection(PanelHttpException(413, "too large")))
+        assertTrue(isPermanentRuntimeEventRejection(PanelHttpException(422, "unsupported")))
+        assertFalse(isPermanentRuntimeEventRejection(PanelHttpException(400, "temporary old server response")))
+        assertFalse(isPermanentRuntimeEventRejection(PanelHttpException(401, "rotate credentials")))
+        assertFalse(isPermanentRuntimeEventRejection(PanelHttpException(404, "rolling deployment")))
+    }
+
+    @Test
+    fun `runtime outbox keeps newest bounded events in delivery order`() {
+        val source = JSONArray()
+        for (index in 0 until 105) {
+            source.put(JSONObject().put("event_id", "event-$index"))
+        }
+        val trimmed = trimRuntimeEventOutbox(source, maxEvents = 100)
+        assertEquals(100, trimmed.length())
+        assertEquals("event-5", trimmed.getJSONObject(0).getString("event_id"))
+        assertEquals("event-104", trimmed.getJSONObject(99).getString("event_id"))
+    }
+
+    @Test
+    fun `runtime event uses robot scoped mobile route and access header`() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{\"ok\":true}"))
+        server.start()
+        try {
+            val event = JSONObject()
+                .put("schema_version", RuntimeEventReporter.SCHEMA_VERSION)
+                .put("event_id", "event-1")
+                .put("event_type", "mobile.network.state_changed")
+                .put("source", JSONObject().put("id", "mobile-installation-1"))
+            PanelApiClient.publishRuntimeEvent(
+                http = OkHttpClient(),
+                baseUrl = server.url("/").toString(),
+                robotId = "robot-01",
+                event = event,
+                panelClientToken = "mobile-access-token",
+            )
+            val request = server.takeRequest()
+            assertEquals("/api/mobile/robots/robot-01/events", request.path)
+            assertEquals("mobile-access-token", request.getHeader("X-Mobile-Token"))
+            assertEquals("mobile.network.state_changed", JSONObject(request.body.readUtf8()).getString("event_type"))
+        } finally {
+            server.shutdown()
+        }
+    }
+
     @Test
     fun `runtime snapshot does not treat configured control as connected without live evidence`() {
         val snapshot = buildSnapshot(
