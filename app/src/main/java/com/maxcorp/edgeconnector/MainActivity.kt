@@ -1236,15 +1236,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun scheduleMenuRecoveryRetry(
-        panelOnlyConnected: Boolean,
+        recoveryNeeded: Boolean,
         hasHomeWifi: Boolean,
     ) {
         if (menuRecoveryRetryJob?.isActive == true) return
         val plan = MenuRecoveryRetryPolicy.next(
             completedAttempts = menuRecoveryRetryAttempt,
-            panelOnlyConnected = panelOnlyConnected,
+            recoveryNeeded = recoveryNeeded,
             hasHomeWifi = hasHomeWifi,
-        ) ?: return
+        )
+        if (plan == null) {
+            if (
+                MenuRecoveryRetryPolicy.exhausted(
+                    completedAttempts = menuRecoveryRetryAttempt,
+                    recoveryNeeded = recoveryNeeded,
+                    hasHomeWifi = hasHomeWifi,
+                )
+            ) {
+                timeoutWifiRecoveryAsync()
+            }
+            return
+        }
         menuRecoveryRetryAttempt = plan.attempt
         menuRecoveryRetryJob = uiScope.launch {
             delay(plan.delayMs)
@@ -1257,6 +1269,7 @@ class MainActivity : AppCompatActivity() {
                 draft.robotId.isNotBlank() &&
                 WifiInfoHelper.currentSubnetPrefix(this@MainActivity).isNotBlank()
             ) {
+                reportWifiRecoveryRetryAsync(plan.attempt)
                 scheduleMenuStabilization(reason = "wifi_recovery_retry_${plan.attempt}", delayMs = 0L)
             }
         }
@@ -1578,6 +1591,7 @@ class MainActivity : AppCompatActivity() {
         tvRobotCheck.text = statusText
         tvSuccessMessage.text = getString(R.string.wifi_robot_found_success)
         showMenuWithStatus(getString(R.string.menu_status_connected_host, host))
+        completeWifiRecoveryAsync(updatedDraft)
         reportPresenceAsync(MobilePresenceState.HOME_WIFI_LOCAL, localHost = host)
         syncConnectorService(updatedDraft)
         toastText?.let(::toast)
@@ -2475,6 +2489,10 @@ class MainActivity : AppCompatActivity() {
             updateLocalDiagnostics(getString(R.string.diagnostics_local_vpn_active))
             renderDiagnostics()
             setStatus(getString(R.string.menu_status_vpn_active))
+            scheduleMenuRecoveryRetry(
+                recoveryNeeded = wifiRecoveryCorrelationId.isNotBlank(),
+                hasHomeWifi = subnetPrefix.isNotBlank(),
+            )
             return
         }
 
@@ -2486,6 +2504,10 @@ class MainActivity : AppCompatActivity() {
                 setStatus(getString(R.string.menu_status_robot_missing))
                 reportPresenceAsync(MobilePresenceState.NOT_FOUND)
                 stopConnectorService()
+                scheduleMenuRecoveryRetry(
+                    recoveryNeeded = wifiRecoveryCorrelationId.isNotBlank(),
+                    hasHomeWifi = true,
+                )
                 return
             }
         } else if (visibilityDecision.type == RobotConnectivityDecisionType.UNKNOWN) {
@@ -2504,9 +2526,9 @@ class MainActivity : AppCompatActivity() {
             visibilityDecision.type == RobotConnectivityDecisionType.PHONE_ON_ROBOT_WIFI ||
             visibilityDecision.type == RobotConnectivityDecisionType.ROBOT_VISIBLE_NEARBY
         ) {
-            if (panelOnlyConnected && subnetPrefix.isNotBlank()) {
+            if (subnetPrefix.isNotBlank()) {
                 scheduleMenuRecoveryRetry(
-                    panelOnlyConnected = panelOnlyConnected,
+                    recoveryNeeded = panelOnlyConnected || wifiRecoveryCorrelationId.isNotBlank(),
                     hasHomeWifi = true,
                 )
             }
@@ -2589,15 +2611,14 @@ class MainActivity : AppCompatActivity() {
         if (networkLost || networkRecovered) {
             resetMenuRecoveryRetry()
         }
-        if (networkLost && wifiRecoveryCorrelationId.isBlank()) {
-            wifiRecoveryCorrelationId = "wifi-recovery-${UUID.randomUUID()}"
-        }
-        val correlationId = wifiRecoveryCorrelationId
-        val taskStatus = when {
-            networkLost -> "running"
-            networkRecovered && correlationId.isNotBlank() -> "completed"
-            else -> "observing"
-        }
+        val recoveryDecision = WifiRecoveryRuntimePolicy.onNetworkTransition(
+            currentCorrelationId = wifiRecoveryCorrelationId,
+            networkLost = networkLost,
+            networkRecovered = networkRecovered,
+            newCorrelationId = if (networkLost) "wifi-recovery-${UUID.randomUUID()}" else "",
+        )
+        wifiRecoveryCorrelationId = recoveryDecision.correlationId
+        val correlationId = recoveryDecision.correlationId
         val linkStatus = when (visibilityDecision.type) {
             RobotConnectivityDecisionType.PHONE_ON_ROBOT_WIFI -> "available"
             RobotConnectivityDecisionType.ROBOT_VISIBLE_NEARBY -> "degraded"
@@ -2627,7 +2648,7 @@ class MainActivity : AppCompatActivity() {
                         JSONObject()
                             .put("id", correlationId)
                             .put("kind", "wifi_recovery")
-                            .put("status", taskStatus)
+                            .put("status", recoveryDecision.taskStatus ?: "running")
                     },
                     error = if (networkLost) {
                         JSONObject()
@@ -2644,8 +2665,119 @@ class MainActivity : AppCompatActivity() {
                 ),
             )
         }
-        if (networkRecovered && correlationId.isNotBlank()) {
-            wifiRecoveryCorrelationId = ""
+    }
+
+    private fun reportWifiRecoveryRetryAsync(attempt: Int) {
+        val correlationId = wifiRecoveryCorrelationId.trim()
+        val draft = configStore.loadDraft()
+        if (correlationId.isBlank() || draft.robotId.isBlank()) return
+        uiScope.launch {
+            runtimeEventReporter.publish(
+                RuntimeEventTarget(
+                    baseUrl = panelBaseUrl(),
+                    robotId = draft.robotId,
+                    panelClientToken = draft.panelClientToken,
+                    onboardingCode = draft.onboardingCode,
+                ),
+                runtimeEventReporter.event(
+                    eventType = "mobile.wifi_recovery.retrying",
+                    state = JSONObject()
+                        .put("domain", "connectivity")
+                        .put("name", "local_robot")
+                        .put("status", "verifying"),
+                    link = JSONObject()
+                        .put("kind", "mobile_robot")
+                        .put("status", "connecting"),
+                    task = JSONObject()
+                        .put("id", correlationId)
+                        .put("kind", "wifi_recovery")
+                        .put("status", "retrying"),
+                    metrics = JSONObject().put("retry_count", attempt),
+                    attributes = JSONObject().put("trigger", "automatic_local_probe"),
+                    correlationId = correlationId,
+                ),
+            )
+        }
+    }
+
+    private fun completeWifiRecoveryAsync(draft: OnboardingDraft) {
+        val completion = WifiRecoveryRuntimePolicy.onLocalRobotVerified(
+            currentCorrelationId = wifiRecoveryCorrelationId,
+        ) ?: return
+        wifiRecoveryCorrelationId = completion.nextCorrelationId
+        uiScope.launch {
+            runtimeEventReporter.publish(
+                RuntimeEventTarget(
+                    baseUrl = panelBaseUrl(),
+                    robotId = draft.robotId,
+                    panelClientToken = draft.panelClientToken,
+                    onboardingCode = draft.onboardingCode,
+                ),
+                runtimeEventReporter.event(
+                    eventType = "mobile.wifi_recovery.completed",
+                    state = JSONObject()
+                        .put("domain", "connectivity")
+                        .put("name", "local_robot")
+                        .put("status", "ready"),
+                    link = JSONObject()
+                        .put("kind", "mobile_robot")
+                        .put("status", "available"),
+                    task = JSONObject()
+                        .put("id", completion.correlationId)
+                        .put("kind", "wifi_recovery")
+                        .put("status", completion.taskStatus),
+                    attributes = JSONObject().put("trigger", "local_robot_verified"),
+                    correlationId = completion.correlationId,
+                ),
+            )
+        }
+    }
+
+    private fun timeoutWifiRecoveryAsync() {
+        val timeout = WifiRecoveryRuntimePolicy.onRetryLimitReached(
+            currentCorrelationId = wifiRecoveryCorrelationId,
+        ) ?: return
+        val draft = configStore.loadDraft()
+        if (draft.robotId.isBlank()) return
+        wifiRecoveryCorrelationId = timeout.nextCorrelationId
+        val retryCount = menuRecoveryRetryAttempt
+        if (currentStep == WizardStep.MENU && !awaitingRobotProvision) {
+            val finalStatus = getString(R.string.wifi_robot_recovery_timed_out)
+            tvRobotCheck.text = finalStatus
+            tvSuccessMessage.text = finalStatus
+            setStatus(getString(R.string.menu_status_recovery_timed_out))
+        }
+        uiScope.launch {
+            runtimeEventReporter.publish(
+                RuntimeEventTarget(
+                    baseUrl = panelBaseUrl(),
+                    robotId = draft.robotId,
+                    panelClientToken = draft.panelClientToken,
+                    onboardingCode = draft.onboardingCode,
+                ),
+                runtimeEventReporter.event(
+                    eventType = "mobile.wifi_recovery.timed_out",
+                    severity = "warning",
+                    state = JSONObject()
+                        .put("domain", "connectivity")
+                        .put("name", "local_robot")
+                        .put("status", "not_verified"),
+                    link = JSONObject()
+                        .put("kind", "mobile_robot")
+                        .put("status", "degraded"),
+                    task = JSONObject()
+                        .put("id", timeout.correlationId)
+                        .put("kind", "wifi_recovery")
+                        .put("status", timeout.taskStatus),
+                    error = JSONObject()
+                        .put("code", "local_robot_not_confirmed")
+                        .put("message", "Локальная связь с роботом не подтверждена после автоматических проверок")
+                        .put("retryable", true),
+                    metrics = JSONObject().put("retry_count", retryCount),
+                    attributes = JSONObject().put("trigger", "automatic_retry_limit"),
+                    correlationId = timeout.correlationId,
+                ),
+            )
         }
     }
 
@@ -2889,6 +3021,9 @@ class MainActivity : AppCompatActivity() {
 
             matchesStatusTemplate(statusText, R.string.menu_status_platform_only) ->
                 R.string.menu_hero_title_platform_only
+
+            matchesStatusTemplate(statusText, R.string.menu_status_recovery_timed_out) ->
+                R.string.menu_hero_title_missing
 
             matchesStatusTemplate(statusText, R.string.menu_status_robot_missing) ->
                 R.string.menu_hero_title_missing

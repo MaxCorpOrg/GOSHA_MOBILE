@@ -11,10 +11,10 @@ internal object MenuRecoveryRetryPolicy {
 
     fun next(
         completedAttempts: Int,
-        panelOnlyConnected: Boolean,
+        recoveryNeeded: Boolean,
         hasHomeWifi: Boolean,
     ): MenuRecoveryRetryPlan? {
-        if (!panelOnlyConnected || !hasHomeWifi || completedAttempts >= LIMIT) {
+        if (!recoveryNeeded || !hasHomeWifi || completedAttempts >= LIMIT) {
             return null
         }
         val attempt = completedAttempts.coerceAtLeast(0) + 1
@@ -22,5 +22,13 @@ internal object MenuRecoveryRetryPolicy {
             attempt = attempt,
             delayMs = BASE_DELAY_MS * attempt,
         )
+    }
+
+    fun exhausted(
+        completedAttempts: Int,
+        recoveryNeeded: Boolean,
+        hasHomeWifi: Boolean,
+    ): Boolean {
+        return recoveryNeeded && hasHomeWifi && completedAttempts >= LIMIT
     }
 }
