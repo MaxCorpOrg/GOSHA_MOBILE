@@ -512,18 +512,20 @@ class MainActivity : AppCompatActivity() {
     ) {
         val current = configStore.loadDraft()
         val mobileProfile = bundle?.mobileProfile
-        val selfhostBundle = bundle?.selfhostXiaozhi
         val resolvedCode = bundle?.code?.takeIf { it.isNotBlank() }
             ?: etCode.text?.toString()?.trim().orEmpty().ifBlank { current.onboardingCode }
         val resolvedCloudEndpoint = bundle?.cloudEndpoint?.takeIf { it.isNotBlank() } ?: current.cloudEndpoint
         val cloudEndpointParts = parseCloudEndpoint(resolvedCloudEndpoint)
+        val edgeHubParts = parseCloudEndpoint(bundle?.edgeHubUrl.orEmpty())
         val panelUrl = mobileProfile?.panelUrl?.takeIf { it.isNotBlank() }
             ?: bundle?.panelUrl?.takeIf { it.isNotBlank() }
             ?: current.panelBaseUrl
-        val hubBaseUrl = mobileProfile?.mcpEndpointBase?.takeIf { it.isNotBlank() }
-            ?: selfhostBundle?.mcpEndpointBase?.takeIf { it.isNotBlank() }
-            ?: cloudEndpointParts.hubBaseUrl.takeIf { it.isNotBlank() }
-            ?: current.hubBaseUrl
+        val hubBaseUrl = if (bundle != null) {
+            edgeHubParts.hubBaseUrl.takeIf { it.isNotBlank() }
+                ?: bundle.edgeHubUrl.trim().substringBefore('?')
+        } else {
+            current.hubBaseUrl
+        }
         val robotWifiPrefixes = mobileProfile?.robotWifiPrefixes
             ?.filter { it.isNotBlank() }
             ?.joinToString(",")
@@ -532,13 +534,18 @@ class MainActivity : AppCompatActivity() {
         val resolvedRobotId = bundle?.robotId?.takeIf { it.isNotBlank() }
             ?: cloudEndpointParts.robotId.takeIf { it.isNotBlank() }
             ?: current.robotId
+        val resolvedExpectedDeviceId = bundle?.selfhostXiaozhi?.deviceId?.takeIf { it.isNotBlank() }
+            ?: current.expectedDeviceId
         val merged = current.copy(
             panelBaseUrl = panelUrl,
             hubBaseUrl = hubBaseUrl,
             panelClientToken = bundle?.panelClientToken?.takeIf { it.isNotBlank() } ?: current.panelClientToken,
             robotId = resolvedRobotId,
+            expectedDeviceId = resolvedExpectedDeviceId,
             robotName = bundle?.robotName?.takeIf { it.isNotBlank() } ?: current.robotName,
-            token = cloudEndpointParts.token.takeIf { it.isNotBlank() } ?: current.token,
+            token = edgeHubParts.token.takeIf { it.isNotBlank() }
+                ?: cloudEndpointParts.token.takeIf { it.isNotBlank() }
+                ?: current.token,
             cloudEndpoint = resolvedCloudEndpoint,
             planCode = bundle?.planCode?.takeIf { it.isNotBlank() } ?: current.planCode,
             planName = bundle?.planName?.takeIf { it.isNotBlank() } ?: current.planName,
@@ -1169,10 +1176,13 @@ class MainActivity : AppCompatActivity() {
     private suspend fun discoverRobotLocally(
         subnetPrefix: String,
         preferredHosts: List<String> = emptyList(),
+        allowGenericSweep: Boolean = false,
+        expectedDeviceId: String = "",
     ): Pair<String?, String> {
         Log.d(
             logTag,
-            "discoverRobotLocally(subnet=$subnetPrefix, preferred=${preferredHosts.filter { it.isNotBlank() }})"
+            "discoverRobotLocally(subnet=$subnetPrefix, preferred=${preferredHosts.filter { it.isNotBlank() }}, " +
+                "generic=$allowGenericSweep)"
         )
         val result = when (
             val run = LocalRobotProbeCoordinator.runMainActivitySearch(
@@ -1193,7 +1203,9 @@ class MainActivity : AppCompatActivity() {
                     LocalRobotDiscovery.discover(
                         socketFactory = WifiInfoHelper.currentWifiNetwork(this)?.socketFactory,
                         subnetPrefix = subnetPrefix,
-                        preferredHosts = preferredHosts
+                        preferredHosts = preferredHosts,
+                        allowGenericSweep = allowGenericSweep,
+                        expectedDeviceId = expectedDeviceId,
                     )
                 }
             }
@@ -1317,6 +1329,7 @@ class MainActivity : AppCompatActivity() {
     private suspend fun resolvePanelAndLocalReachability(
         draft: OnboardingDraft,
         subnetPrefix: String,
+        allowGenericSweep: Boolean = false,
     ): ReachabilityCheckResult = coroutineScope {
         val panelDeferred = async { resolveRobotViaPanel() }
         if (subnetPrefix.isBlank()) {
@@ -1329,12 +1342,17 @@ class MainActivity : AppCompatActivity() {
             async {
                 // Локальную проверку ведем через Wi-Fi-привязанный клиент,
                 // поэтому не прерываем ее только из-за общего VPN на телефоне.
-                val panelHostHint = withTimeoutOrNull(900L) {
-                    panelDeferred.await()?.localHostHint.orEmpty()
-                }.orEmpty()
+                val panelSnapshotHint = withTimeoutOrNull(900L) {
+                    panelDeferred.await()
+                }
+                val panelHostHint = panelSnapshotHint?.localHostHint.orEmpty()
+                val expectedDeviceId = panelSnapshotHint?.deviceId?.takeIf { it.isNotBlank() }
+                    ?: draft.expectedDeviceId
                 discoverRobotLocally(
                     subnetPrefix,
                     preferredDiscoveryHosts(draft, listOf(panelHostHint)),
+                    allowGenericSweep = allowGenericSweep,
+                    expectedDeviceId = if (allowGenericSweep) expectedDeviceId else "",
                 )
             }
         } else {
@@ -1559,7 +1577,11 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
 
-            val reachability = resolvePanelAndLocalReachability(draft, subnetPrefix)
+            val reachability = resolvePanelAndLocalReachability(
+                draft,
+                subnetPrefix,
+                allowGenericSweep = true,
+            )
             if (
                 maybeHandleRobotViaPanel(
                     snapshot = reachability.panelSnapshot,
@@ -2077,6 +2099,8 @@ class MainActivity : AppCompatActivity() {
                                 draft,
                                 listOf(provisionPanelState.localHostHint),
                             ),
+                            allowGenericSweep = true,
+                            expectedDeviceId = draft.expectedDeviceId,
                         )
                         if (!host.isNullOrBlank()) {
                             maybeHandleRobotFound(

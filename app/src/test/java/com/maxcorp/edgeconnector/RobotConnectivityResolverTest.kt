@@ -119,6 +119,7 @@ class RobotConnectivityResolverTest {
         localHostHint: String = localHost,
     ) = RobotRuntimeSnapshot(
         robotId = "jarvis-01",
+        deviceId = "",
         connected = connected,
         mode = "cloud-mcp",
         transportState = "reachable",

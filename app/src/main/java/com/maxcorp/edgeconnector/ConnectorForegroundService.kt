@@ -18,11 +18,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.json.JSONObject
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class ConnectorForegroundService : Service() {
@@ -100,8 +102,13 @@ class ConnectorForegroundService : Service() {
         serviceScope.launch(connectorJob) {
             runPanelPresenceLoop(config)
         }
-        serviceScope.launch(connectorJob) {
-            runConnectorLoop(config)
+        if (config.canRunEdgeHub()) {
+            serviceScope.launch(connectorJob) {
+                runConnectorLoop(config)
+            }
+        } else {
+            setConnectorState("hub_not_configured")
+            publishStatus("Edge Hub не настроен: работает локальная проверка и presence")
         }
     }
 
@@ -120,27 +127,36 @@ class ConnectorForegroundService : Service() {
         while (serviceScope.isActive && connectorJob.isActive) {
             try {
                 publishStatus("Подключение к Hub...")
-                val hub = HubSocket.connect(httpClient, agentUrl)
-                publishStatus("Hub подключен")
-                setConnectorState("hub_connected")
+                val hub = HubSocket.connect(
+                    http = httpClient,
+                    url = agentUrl,
+                    expectedRobotId = config.robotId,
+                )
+                publishStatus("Hub готов к маршрутизации")
+                setConnectorState("hub_ready")
                 backoffSec = 1L
-                publishAgentStatus(hub, config)
+                var heartbeatJob: kotlinx.coroutines.Job? = null
+                try {
+                    publishAgentStatus(hub, config)
 
-                val heartbeatJob = serviceScope.launch(connectorJob) {
-                    while (isActive) {
-                        delay(15_000)
-                        publishAgentStatus(hub, config)
+                    heartbeatJob = serviceScope.launch(connectorJob) {
+                        while (isActive) {
+                            delay(15_000)
+                            publishAgentStatus(hub, config)
+                        }
                     }
-                }
 
-                for (raw in hub.incoming) {
-                    handleHubMessage(raw, hub, config)
-                }
+                    for (raw in hub.incoming) {
+                        handleHubMessage(raw, hub, config)
+                    }
 
-                heartbeatJob.cancel()
-                val reason = hub.awaitClosed()
-                publishStatus("Hub закрыт: $reason")
-                setConnectorState("hub_closed")
+                    val reason = hub.awaitClosed()
+                    publishStatus("Hub закрыт: $reason")
+                    setConnectorState("hub_closed")
+                } finally {
+                    heartbeatJob?.cancelAndJoin()
+                    hub.close()
+                }
             } catch (exc: Exception) {
                 publishStatus("Ошибка: ${exc.message}")
                 setConnectorState("hub_error")
@@ -179,7 +195,11 @@ class ConnectorForegroundService : Service() {
             }
 
             "ping" -> {
-                hub.send(JSONObject().put("type", "pong").put("ts", System.currentTimeMillis() / 1000).toString())
+                sendToHub(
+                    hub,
+                    JSONObject().put("type", "pong").put("ts", System.currentTimeMillis() / 1000).toString(),
+                    "pong",
+                )
                 publishAgentStatus(hub, config)
             }
 
@@ -211,7 +231,7 @@ class ConnectorForegroundService : Service() {
                     .put("bridge_id", bridgeId)
                     .put("payload", responsePayload)
                     .put("ts", System.currentTimeMillis() / 1000)
-                hub.send(envelope.toString())
+                sendToHub(hub, envelope.toString(), "mcp_response")
                 publishAgentStatus(hub, config)
             }
         }
@@ -240,13 +260,21 @@ class ConnectorForegroundService : Service() {
             .put("robot_ws_probe_min_interval_ms", probe.serviceMinIntervalMs)
             .put("updated_at", System.currentTimeMillis() / 1000)
 
-        hub.send(
+        sendToHub(
+            hub,
             JSONObject()
                 .put("type", "agent_status")
                 .put("status", status)
                 .put("ts", System.currentTimeMillis() / 1000)
-                .toString()
+                .toString(),
+            "agent_status",
         )
+    }
+
+    private fun sendToHub(hub: HubSocket, text: String, messageType: String) {
+        if (!hub.send(text)) {
+            throw IOException("failed to send $messageType to hub")
+        }
     }
 
     private suspend fun probeRobotWs(config: ConnectorConfig): ServiceRobotWsProbeResult {

@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONObject
 import java.io.IOException
 
 class HubSocket private constructor(
@@ -31,10 +32,17 @@ class HubSocket private constructor(
     }
 
     companion object {
-        suspend fun connect(http: OkHttpClient, url: String, timeoutMs: Long = 10_000): HubSocket {
+        suspend fun connect(
+            http: OkHttpClient,
+            url: String,
+            expectedRobotId: String = "",
+            timeoutMs: Long = 10_000,
+        ): HubSocket {
             val incoming = Channel<String>(Channel.UNLIMITED)
             val opened = CompletableDeferred<Unit>()
+            val protocolReady = CompletableDeferred<Unit>()
             val closed = CompletableDeferred<String>()
+            val expected = expectedRobotId.trim()
 
             val request = Request.Builder().url(url).build()
             lateinit var socket: WebSocket
@@ -45,16 +53,33 @@ class HubSocket private constructor(
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     incoming.trySend(text)
+                    val msg = runCatching { JSONObject(text) }.getOrNull() ?: return
+                    if (msg.optString("type") != "agent_ready") return
+                    val actualRobotId = msg.optString("robot_id", "").trim()
+                    if (expected.isNotBlank() && actualRobotId.isNotBlank() && actualRobotId != expected) {
+                        if (!protocolReady.isCompleted) {
+                            protocolReady.completeExceptionally(IOException("hub agent_ready robot mismatch"))
+                        }
+                        webSocket.close(1008, "robot mismatch")
+                        return
+                    }
+                    if (!protocolReady.isCompleted) protocolReady.complete(Unit)
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                     if (!closed.isCompleted) closed.complete("$code/$reason")
+                    if (!protocolReady.isCompleted) {
+                        protocolReady.completeExceptionally(IOException("hub closed before agent_ready"))
+                    }
                     incoming.close()
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     if (!opened.isCompleted) {
                         opened.completeExceptionally(t)
+                    }
+                    if (!protocolReady.isCompleted) {
+                        protocolReady.completeExceptionally(t)
                     }
                     if (!closed.isCompleted) {
                         closed.complete("error: ${t.message ?: t::class.java.simpleName}")
@@ -65,6 +90,7 @@ class HubSocket private constructor(
 
             try {
                 withTimeout(timeoutMs) { opened.await() }
+                withTimeout(timeoutMs) { protocolReady.await() }
             } catch (exc: Exception) {
                 socket.cancel()
                 throw IOException("failed to connect to hub: ${exc.message}", exc)

@@ -11,6 +11,7 @@ import javax.net.SocketFactory
 internal data class LocalRobotDiscoveryProbeHooks(
     val isPortOpen: suspend (SocketFactory?, String, Int, Long) -> Boolean,
     val isWsOpen: suspend (SocketFactory?, String, Long) -> Boolean,
+    val matchesDeviceIdentity: suspend (SocketFactory?, String, String, Long) -> Boolean = { _, _, _, _ -> false },
 ) {
     companion object {
         val REAL = LocalRobotDiscoveryProbeHooks(
@@ -21,6 +22,14 @@ internal data class LocalRobotDiscoveryProbeHooks(
                 LocalWsHandshakeProbe.isOpen(
                     socketFactory = socketFactory,
                     host = host,
+                    timeoutMs = timeoutMs,
+                )
+            },
+            matchesDeviceIdentity = { socketFactory, host, expectedDeviceId, timeoutMs ->
+                LocalRobotIdentityProbe.matches(
+                    socketFactory = socketFactory,
+                    host = host,
+                    expectedDeviceId = expectedDeviceId,
                     timeoutMs = timeoutMs,
                 )
             },
@@ -41,10 +50,13 @@ object LocalRobotDiscovery {
         socketFactory: SocketFactory? = null,
         preferredHosts: List<String> = emptyList(),
         probeHooks: LocalRobotDiscoveryProbeHooks = LocalRobotDiscoveryProbeHooks.REAL,
+        allowGenericSweep: Boolean = false,
+        expectedDeviceId: String = "",
     ): Pair<String?, String> = coroutineScope {
         if (subnetPrefix.isBlank()) {
             return@coroutineScope null to "Телефон не подключен к Wi‑Fi"
         }
+        val expectedId = expectedDeviceId.trim()
 
         val worker = Dispatchers.IO.limitedParallelism(DISCOVERY_PARALLELISM)
         val preferred = preferredHosts
@@ -69,6 +81,13 @@ object LocalRobotDiscovery {
             }
         }
 
+        if (!allowGenericSweep) {
+            return@coroutineScope null to "Робот не найден по закреплённому адресу; общий поиск по сети не запускался"
+        }
+        if (expectedId.isBlank()) {
+            return@coroutineScope null to "Общий поиск по сети не запускался без device_id для проверки устройства"
+        }
+
         // Для домашних DHCP-сетей чаще всего полезен широкий коридор 100..180.
         val commonRange = (100..180).toList() + listOf(10, 20, 30, 50, 60, 70, 80, 90, 190, 200, 210)
         val priority = (preferred + commonRange + (1..254)).distinct()
@@ -91,6 +110,8 @@ object LocalRobotDiscovery {
                         tcpTimeoutMs = TCP_PROBE_TIMEOUT_MS,
                         wsTimeoutMs = WS_PROBE_TIMEOUT_MS,
                         skipPortPrefilter = false,
+                        expectedDeviceId = expectedId,
+                        requireIdentityMatch = true,
                         probeHooks = probeHooks,
                     )
                 }
@@ -109,6 +130,8 @@ object LocalRobotDiscovery {
         tcpTimeoutMs: Long,
         wsTimeoutMs: Long,
         skipPortPrefilter: Boolean,
+        expectedDeviceId: String = "",
+        requireIdentityMatch: Boolean = false,
         probeHooks: LocalRobotDiscoveryProbeHooks,
     ): Boolean {
         val factories = buildList {
@@ -120,7 +143,13 @@ object LocalRobotDiscovery {
             if (!skipPortPrefilter && !probeHooks.isPortOpen(factory, host, 8080, tcpTimeoutMs)) {
                 continue
             }
-            if (probeHooks.isWsOpen(factory, host, wsTimeoutMs)) {
+            if (!probeHooks.isWsOpen(factory, host, wsTimeoutMs)) {
+                continue
+            }
+            if (!requireIdentityMatch) {
+                return true
+            }
+            if (probeHooks.matchesDeviceIdentity(factory, host, expectedDeviceId, wsTimeoutMs)) {
                 return true
             }
         }

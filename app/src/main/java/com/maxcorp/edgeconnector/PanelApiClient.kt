@@ -39,6 +39,7 @@ data class RobotUser(
 
 data class RobotRuntimeSnapshot(
     val robotId: String,
+    val deviceId: String,
     val connected: Boolean,
     val mode: String,
     val transportState: String,
@@ -68,6 +69,7 @@ data class MobilePresencePayload(
 
 data class SelfhostXiaozhiBundle(
     val provider: String,
+    val deviceId: String,
     val otaUrl: String,
     val activateUrl: String,
     val websocketUrl: String,
@@ -87,6 +89,7 @@ data class MobileProfile(
 data class OnboardingBundle(
     val code: String,
     val panelUrl: String,
+    val edgeHubUrl: String,
     val panelClientToken: String,
     val robotId: String,
     val robotName: String,
@@ -165,7 +168,7 @@ object PanelApiClient {
             throw IOException(root.optString("error", "Не удалось обработать код"))
         }
         val bundle = root.optJSONObject("bundle") ?: JSONObject()
-        bundle.toOnboardingBundle()
+        parseOnboardingBundle(bundle)
     }
 
     suspend fun activateCode(
@@ -194,7 +197,7 @@ object PanelApiClient {
             throw IOException(root.optString("error", "Не удалось активировать код"))
         }
         val bundle = root.optJSONObject("bundle") ?: JSONObject()
-        bundle.toOnboardingBundle()
+        parseOnboardingBundle(bundle)
     }
 
     suspend fun fetchPlans(http: OkHttpClient, baseUrl: String): List<PlanOption> = withContext(Dispatchers.IO) {
@@ -504,6 +507,7 @@ object PanelApiClient {
             connectivityLastSeenIso = connectivity.optString("last_seen_iso", ""),
             connectivityBoardName = connectivity.optString("board_name", ""),
             connectivityAppVersion = connectivity.optString("app_version", ""),
+            cloudDeviceId = cloudConsole.optString("device_id", ""),
             cloudLastSeenIso = cloudConsole.optString("last_seen_iso", ""),
             cloudBoardName = cloudConsole.optString("board_name", ""),
             cloudBoardIp = cloudConsole.optString("board_ip", ""),
@@ -528,6 +532,7 @@ object PanelApiClient {
         connectivityLastSeenIso: String,
         connectivityBoardName: String,
         connectivityAppVersion: String,
+        cloudDeviceId: String,
         cloudLastSeenIso: String,
         cloudBoardName: String,
         cloudBoardIp: String,
@@ -550,6 +555,7 @@ object PanelApiClient {
         }
         return RobotRuntimeSnapshot(
             robotId = robotId,
+            deviceId = cloudDeviceId.trim(),
             connected = panelConnected,
             mode = mode,
             transportState = transportState,
@@ -630,6 +636,10 @@ object PanelApiClient {
         }
     }
 
+    internal fun parseOnboardingBundle(bundle: JSONObject): OnboardingBundle {
+        return bundle.toOnboardingBundle()
+    }
+
     private fun JSONObject.toOnboardingBundle(): OnboardingBundle {
         val subscription = optJSONObject("subscription") ?: JSONObject()
         val owner = optJSONObject("owner") ?: JSONObject()
@@ -639,6 +649,7 @@ object PanelApiClient {
         return OnboardingBundle(
             code = optString("code", ""),
             panelUrl = optString("panel_url", ""),
+            edgeHubUrl = optString("edge_hub_url", ""),
             panelClientToken = optString("panel_client_token", ""),
             robotId = optString("robot_id", ""),
             robotName = optString("robot_name", optString("robot_id", "")),
@@ -664,6 +675,7 @@ object PanelApiClient {
     private fun JSONObject.toSelfhostXiaozhiBundle(): SelfhostXiaozhiBundle {
         return SelfhostXiaozhiBundle(
             provider = optString("provider", ""),
+            deviceId = optString("device_id", ""),
             otaUrl = optString("ota_url", ""),
             activateUrl = optString("activate_url", ""),
             websocketUrl = optString("websocket_url", ""),

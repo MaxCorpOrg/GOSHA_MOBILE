@@ -173,11 +173,11 @@ object WifiInfoHelper {
 
     private fun findWifiNetwork(manager: ConnectivityManager): Network? {
         val active = manager.activeNetwork
-        if (active != null && manager.getNetworkCapabilities(active)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
-            return active
-        }
-        return manager.allNetworks.firstOrNull { network ->
-            manager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        return chooseWifiNetworkForPolicy(
+            activeNetwork = active,
+            allNetworks = manager.allNetworks.toList(),
+        ) { network ->
+            manager.getNetworkCapabilities(network).toTransportFlags()
         }
     }
 
@@ -191,5 +191,35 @@ object WifiInfoHelper {
         val parts = ipv4.split('.')
         if (parts.size < 3) return ""
         return parts.take(3).joinToString(".")
+    }
+
+    internal data class NetworkTransportFlags(
+        val hasWifi: Boolean,
+        val hasVpn: Boolean,
+    )
+
+    internal fun <T> chooseWifiNetworkForPolicy(
+        activeNetwork: T?,
+        allNetworks: List<T>,
+        flagsFor: (T) -> NetworkTransportFlags?,
+    ): T? {
+        if (activeNetwork != null && flagsFor(activeNetwork).isUsableWifiNetwork()) {
+            return activeNetwork
+        }
+        return allNetworks.firstOrNull { network ->
+            flagsFor(network).isUsableWifiNetwork()
+        }
+    }
+
+    private fun NetworkCapabilities?.toTransportFlags(): NetworkTransportFlags? {
+        if (this == null) return null
+        return NetworkTransportFlags(
+            hasWifi = hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+            hasVpn = hasTransport(NetworkCapabilities.TRANSPORT_VPN),
+        )
+    }
+
+    private fun NetworkTransportFlags?.isUsableWifiNetwork(): Boolean {
+        return this != null && hasWifi && !hasVpn
     }
 }

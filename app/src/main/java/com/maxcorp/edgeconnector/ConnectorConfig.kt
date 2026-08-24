@@ -12,6 +12,7 @@ private const val PREFS = "gosha_mobile_prefs"
 
 private const val K_HUB_URL = "hub_url"
 private const val K_ROBOT_ID = "robot_id"
+private const val K_EXPECTED_DEVICE_ID = "expected_device_id"
 private const val K_TOKEN = "token"
 private const val K_ROBOT_HOST = "robot_host"
 private const val K_ROBOT_PORT = "robot_port"
@@ -123,6 +124,20 @@ data class ConnectorConfig(
         return URI(base.scheme, base.userInfo, base.host, base.port, normalizePath(path), query, null).toString()
     }
 
+    fun canRunEdgeHub(): Boolean {
+        val base = try {
+            URI(hubBaseUrl.trim())
+        } catch (_: Exception) {
+            return false
+        }
+        val scheme = base.scheme.orEmpty().lowercase()
+        return scheme in setOf("ws", "wss") &&
+            !base.host.isNullOrBlank() &&
+            robotId.isNotBlank() &&
+            token.isNotBlank() &&
+            robotHost.isNotBlank()
+    }
+
     fun robotWsUrl(): String {
         val normalizedPath = normalizePath(if (robotPath.isBlank()) "/ws" else robotPath)
         return URI("ws", null, robotHost.trim(), robotPort, normalizedPath, null, null).toString()
@@ -156,7 +171,7 @@ data class ConnectorConfig(
             val robotHost = sanitizeRobotHost(intent.getStringExtra(ConnectorForegroundService.EXTRA_ROBOT_HOST).orEmpty())
             val robotPort = intent.getIntExtra(ConnectorForegroundService.EXTRA_ROBOT_PORT, 8080)
             val robotPath = intent.getStringExtra(ConnectorForegroundService.EXTRA_ROBOT_PATH).orEmpty()
-            if (hubUrl.isBlank() || robotId.isBlank() || token.isBlank() || robotHost.isBlank()) {
+            if (robotId.isBlank() || robotHost.isBlank()) {
                 return null
             }
             return ConnectorConfig(
@@ -205,7 +220,7 @@ class ConfigStore(context: Context) {
         val path = prefs.getString(K_CONNECTOR_ROBOT_PATH, "")?.ifBlank {
             prefs.getString(K_ROBOT_PATH, "/ws") ?: "/ws"
         } ?: "/ws"
-        if (hub.isBlank() || robotId.isBlank() || token.isBlank() || host.isBlank()) {
+        if (robotId.isBlank() || host.isBlank()) {
             return null
         }
         return ConnectorConfig(
@@ -274,8 +289,9 @@ class ConfigStore(context: Context) {
     fun loadDraft(): OnboardingDraft {
         return OnboardingDraft(
             panelBaseUrl = prefs.getString(K_PANEL_URL, "http://151.241.228.232:18876") ?: "http://151.241.228.232:18876",
-            hubBaseUrl = prefs.getString(K_HUB_URL, "ws://151.241.228.232:18080/mcp") ?: "ws://151.241.228.232:18080/mcp",
+            hubBaseUrl = prefs.getString(K_HUB_URL, "") ?: "",
             robotId = prefs.getString(K_ROBOT_ID, "") ?: "",
+            expectedDeviceId = prefs.getString(K_EXPECTED_DEVICE_ID, "") ?: "",
             robotName = prefs.getString(K_ROBOT_NAME, "") ?: "",
             token = prefs.getString(K_TOKEN, "") ?: "",
             robotHost = sanitizeRobotHost(prefs.getString(K_ROBOT_HOST, "") ?: ""),
@@ -311,6 +327,7 @@ class ConfigStore(context: Context) {
             .putString(K_PANEL_URL, draft.panelBaseUrl)
             .putString(K_HUB_URL, draft.hubBaseUrl)
             .putString(K_ROBOT_ID, draft.robotId)
+            .putString(K_EXPECTED_DEVICE_ID, draft.expectedDeviceId)
             .putString(K_ROBOT_NAME, draft.robotName)
             .putString(K_TOKEN, draft.token)
             .putString(K_ROBOT_HOST, sanitizeRobotHost(draft.robotHost))
@@ -356,8 +373,9 @@ class ConfigStore(context: Context) {
 
 data class OnboardingDraft(
     val panelBaseUrl: String = "http://151.241.228.232:18876",
-    val hubBaseUrl: String = "ws://151.241.228.232:18080/mcp",
+    val hubBaseUrl: String = "",
     val robotId: String = "",
+    val expectedDeviceId: String = "",
     val robotName: String = "",
     val token: String = "",
     val robotHost: String = "",
@@ -387,7 +405,7 @@ data class OnboardingDraft(
     val robotWifiPrefixesCsv: String = "GOSHA-,Xiaozhi-",
 ) {
     fun toConnectorConfigOrNull(): ConnectorConfig? {
-        if (hubBaseUrl.isBlank() || robotId.isBlank() || token.isBlank() || robotHost.isBlank()) {
+        if (robotId.isBlank() || robotHost.isBlank()) {
             return null
         }
         return ConnectorConfig(

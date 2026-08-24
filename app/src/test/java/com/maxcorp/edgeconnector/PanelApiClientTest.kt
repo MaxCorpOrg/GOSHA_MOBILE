@@ -128,6 +128,15 @@ class PanelApiClientTest {
     }
 
     @Test
+    fun `runtime snapshot exposes claimed cloud device id`() {
+        val snapshot = buildSnapshot(
+            cloudDeviceId = "aa:bb:cc:dd:ee:ff",
+        )
+
+        assertEquals("aa:bb:cc:dd:ee:ff", snapshot.deviceId)
+    }
+
+    @Test
     fun `presence payload sends local host only for home wifi local state`() {
         val payload = PanelApiClient.buildMobilePresencePayloadData(
             state = MobilePresenceState.HOME_WIFI_LOCAL,
@@ -151,6 +160,33 @@ class PanelApiClientTest {
         assertEquals("", payload.localHost)
     }
 
+    @Test
+    fun `onboarding bundle keeps edge hub separate from mcp endpoint`() {
+        val bundle = PanelApiClient.parseOnboardingBundle(
+            JSONObject()
+                .put("robot_id", "gosha-main")
+                .put("edge_hub_url", "ws://edge.example/mcp")
+                .put("cloud_endpoint", "ws://mcp.example/mcp/?token=mcp-token&robot_id=gosha-main")
+                .put(
+                    "selfhost_xiaozhi",
+                    JSONObject()
+                        .put("provider", "selfhost_xiaozhi")
+                        .put("device_id", "aa:bb:cc:dd:ee:ff")
+                )
+                .put(
+                    "mobile_profile",
+                    JSONObject()
+                        .put("mcp_endpoint_base", "ws://mcp.example/mcp/")
+                        .put("websocket_url", "ws://voice.example/xiaozhi/v1/")
+                )
+        )
+
+        assertEquals("ws://edge.example/mcp", bundle.edgeHubUrl)
+        assertEquals("ws://mcp.example/mcp/?token=mcp-token&robot_id=gosha-main", bundle.cloudEndpoint)
+        assertEquals("aa:bb:cc:dd:ee:ff", bundle.selfhostXiaozhi?.deviceId)
+        assertEquals("ws://mcp.example/mcp/", bundle.mobileProfile?.mcpEndpointBase)
+    }
+
     private fun buildSnapshot(
         diagnosticsTarget: String = "",
         fallbackWsUrl: String = "",
@@ -167,6 +203,7 @@ class PanelApiClientTest {
         connectivityLastSeenIso: String = "",
         connectivityBoardName: String = "",
         connectivityAppVersion: String = "",
+        cloudDeviceId: String = "",
         cloudLastSeenIso: String = "",
         cloudBoardName: String = "",
         cloudBoardIp: String = "",
@@ -189,6 +226,7 @@ class PanelApiClientTest {
             connectivityLastSeenIso = connectivityLastSeenIso,
             connectivityBoardName = connectivityBoardName,
             connectivityAppVersion = connectivityAppVersion,
+            cloudDeviceId = cloudDeviceId,
             cloudLastSeenIso = cloudLastSeenIso,
             cloudBoardName = cloudBoardName,
             cloudBoardIp = cloudBoardIp,
