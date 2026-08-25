@@ -165,11 +165,13 @@ class MainActivity : AppCompatActivity() {
     private data class ReachabilityCheckResult(
         val panelSnapshot: RobotRuntimeSnapshot?,
         val localHost: String?,
+        val localDeviceId: String = "",
     )
 
     private data class ProvisionPanelState(
         val panelOnlySeen: Boolean,
         val localHostHint: String,
+        val deviceIdHint: String,
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -509,44 +511,50 @@ class MainActivity : AppCompatActivity() {
     private fun saveDraftLocally(
         bundle: OnboardingBundle? = currentBundle,
         discoveredHost: String? = null,
-    ) {
+        discoveredDeviceId: String? = null,
+        savedDeviceIdIsAuthoritative: Boolean = true,
+    ): Boolean {
         val current = configStore.loadDraft()
         val mobileProfile = bundle?.mobileProfile
         val resolvedCode = bundle?.code?.takeIf { it.isNotBlank() }
             ?: etCode.text?.toString()?.trim().orEmpty().ifBlank { current.onboardingCode }
         val resolvedCloudEndpoint = bundle?.cloudEndpoint?.takeIf { it.isNotBlank() } ?: current.cloudEndpoint
-        val cloudEndpointParts = parseCloudEndpoint(resolvedCloudEndpoint)
-        val edgeHubParts = parseCloudEndpoint(bundle?.edgeHubUrl.orEmpty())
         val panelUrl = mobileProfile?.panelUrl?.takeIf { it.isNotBlank() }
             ?: bundle?.panelUrl?.takeIf { it.isNotBlank() }
             ?: current.panelBaseUrl
-        val hubBaseUrl = if (bundle != null) {
-            edgeHubParts.hubBaseUrl.takeIf { it.isNotBlank() }
-                ?: bundle.edgeHubUrl.trim().substringBefore('?')
-        } else {
-            current.hubBaseUrl
-        }
+        val runtimeEndpoints = mergeRuntimeEndpointConfig(
+            current = current,
+            panelBaseUrl = panelUrl,
+            edgeHubUrl = bundle?.edgeHubUrl,
+            cloudEndpoint = resolvedCloudEndpoint,
+            robotId = bundle?.robotId.orEmpty(),
+        )
         val robotWifiPrefixes = mobileProfile?.robotWifiPrefixes
             ?.filter { it.isNotBlank() }
             ?.joinToString(",")
             ?.ifBlank { current.robotWifiPrefixesCsv }
             ?: current.robotWifiPrefixesCsv
-        val resolvedRobotId = bundle?.robotId?.takeIf { it.isNotBlank() }
-            ?: cloudEndpointParts.robotId.takeIf { it.isNotBlank() }
-            ?: current.robotId
-        val resolvedExpectedDeviceId = bundle?.selfhostXiaozhi?.deviceId?.takeIf { it.isNotBlank() }
-            ?: current.expectedDeviceId
+        val resolvedExpectedDeviceId = resolveSavedExpectedDeviceIdentity(
+            current = current,
+            bundleDeviceId = bundle?.selfhostXiaozhi?.deviceId,
+            verifiedLocalDeviceId = discoveredDeviceId,
+            savedDeviceIdIsAuthoritative = savedDeviceIdIsAuthoritative,
+        )
+        if (resolvedExpectedDeviceId.hasConflict) {
+            Log.w(logTag, "Refusing to save local robot draft: ${resolvedExpectedDeviceId.conflictReason}")
+            updateLocalDiagnostics(resolvedExpectedDeviceId.conflictReason)
+            renderDiagnostics()
+            return false
+        }
         val merged = current.copy(
-            panelBaseUrl = panelUrl,
-            hubBaseUrl = hubBaseUrl,
+            panelBaseUrl = runtimeEndpoints.panelBaseUrl,
+            hubBaseUrl = runtimeEndpoints.hubBaseUrl,
             panelClientToken = bundle?.panelClientToken?.takeIf { it.isNotBlank() } ?: current.panelClientToken,
-            robotId = resolvedRobotId,
-            expectedDeviceId = resolvedExpectedDeviceId,
+            robotId = runtimeEndpoints.robotId,
+            expectedDeviceId = resolvedExpectedDeviceId.deviceId,
             robotName = bundle?.robotName?.takeIf { it.isNotBlank() } ?: current.robotName,
-            token = edgeHubParts.token.takeIf { it.isNotBlank() }
-                ?: cloudEndpointParts.token.takeIf { it.isNotBlank() }
-                ?: current.token,
-            cloudEndpoint = resolvedCloudEndpoint,
+            token = runtimeEndpoints.token,
+            cloudEndpoint = runtimeEndpoints.cloudEndpoint,
             planCode = bundle?.planCode?.takeIf { it.isNotBlank() } ?: current.planCode,
             planName = bundle?.planName?.takeIf { it.isNotBlank() } ?: current.planName,
             billingStart = bundle?.billingStart?.takeIf { it.isNotBlank() } ?: current.billingStart,
@@ -569,6 +577,7 @@ class MainActivity : AppCompatActivity() {
             robotWifiPrefixesCsv = robotWifiPrefixes,
         )
         persistDraft(merged)
+        return true
     }
 
     private fun persistDraft(draft: OnboardingDraft) {
@@ -1191,6 +1200,7 @@ class MainActivity : AppCompatActivity() {
                 val freshServiceSuccess = LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
                     subnetPrefix = subnetPrefix,
                     preferredHosts = preferredHosts,
+                    expectedDeviceId = expectedDeviceId,
                 )
                 if (freshServiceSuccess != null) {
                     Log.d(
@@ -1330,12 +1340,16 @@ class MainActivity : AppCompatActivity() {
         draft: OnboardingDraft,
         subnetPrefix: String,
         allowGenericSweep: Boolean = false,
+        savedDeviceIdIsAuthoritative: Boolean = true,
+        panelDeviceIdHint: String = "",
+        panelLocalHostHint: String = "",
     ): ReachabilityCheckResult = coroutineScope {
         val panelDeferred = async { resolveRobotViaPanel() }
         if (subnetPrefix.isBlank()) {
             return@coroutineScope ReachabilityCheckResult(
                 panelSnapshot = panelDeferred.await(),
                 localHost = null,
+                localDeviceId = "",
             )
         }
         val localDeferred = if (subnetPrefix.isNotBlank()) {
@@ -1345,36 +1359,75 @@ class MainActivity : AppCompatActivity() {
                 val panelSnapshotHint = withTimeoutOrNull(900L) {
                     panelDeferred.await()
                 }
-                val panelHostHint = panelSnapshotHint?.localHostHint.orEmpty()
-                val expectedDeviceId = panelSnapshotHint?.deviceId?.takeIf { it.isNotBlank() }
-                    ?: draft.expectedDeviceId
-                discoverRobotLocally(
+                val panelHostHint = panelSnapshotHint?.localHostHint.orEmpty().ifBlank { panelLocalHostHint }
+                val expectedDeviceId = resolveDiscoveryExpectedDeviceIdentity(
+                    panelSnapshot = panelSnapshotHint,
+                    draft = draft,
+                    bundleDeviceId = currentBundle?.selfhostXiaozhi?.deviceId,
+                    savedDeviceIdIsAuthoritative = savedDeviceIdIsAuthoritative,
+                    panelDeviceIdHint = panelDeviceIdHint,
+                )
+                if (!expectedDeviceId.canVerify) {
+                    val detail = expectedDeviceId.conflictReason.ifBlank { "expected_device_id_missing" }
+                    updateLocalDiagnostics(detail)
+                    renderDiagnostics()
+                    return@async Triple(null, detail, "")
+                }
+                val (host, detail) = discoverRobotLocally(
                     subnetPrefix,
                     preferredDiscoveryHosts(draft, listOf(panelHostHint)),
                     allowGenericSweep = allowGenericSweep,
-                    expectedDeviceId = if (allowGenericSweep) expectedDeviceId else "",
+                    expectedDeviceId = expectedDeviceId.deviceId,
                 )
+                Triple(host, detail, if (!host.isNullOrBlank()) expectedDeviceId.deviceId else "")
             }
         } else {
             null
         }
 
-        val localHost = localDeferred?.await()?.first
+        val localResult = localDeferred?.await()
+        val localHost = localResult?.first
+        val localDeviceId = localResult?.third.orEmpty()
         val panelSnapshot = when {
             !localHost.isNullOrBlank() && !panelDeferred.isCompleted ->
                 withTimeoutOrNull(150L) { panelDeferred.await() }
 
             else -> panelDeferred.await()
         }
+        val finalExpectedDeviceId = resolveDiscoveryExpectedDeviceIdentity(
+            panelSnapshot = panelSnapshot,
+            draft = draft,
+            bundleDeviceId = currentBundle?.selfhostXiaozhi?.deviceId,
+            savedDeviceIdIsAuthoritative = savedDeviceIdIsAuthoritative,
+            panelDeviceIdHint = panelDeviceIdHint,
+        )
+        val identityMismatch = finalExpectedDeviceId.hasConflict ||
+            (
+                !localHost.isNullOrBlank() &&
+                    finalExpectedDeviceId.deviceId.isNotBlank() &&
+                    localDeviceId.isNotBlank() &&
+                    finalExpectedDeviceId.deviceId != localDeviceId
+                )
+        val finalLocalHost = if (identityMismatch) {
+            val detail = finalExpectedDeviceId.conflictReason.ifBlank { "device identity mismatch" }
+            updateLocalDiagnostics(detail)
+            renderDiagnostics()
+            null
+        } else {
+            localHost
+        }
 
         ReachabilityCheckResult(
             panelSnapshot = panelSnapshot,
-            localHost = localHost,
+            localHost = finalLocalHost,
+            localDeviceId = if (finalLocalHost.isNullOrBlank()) "" else localDeviceId,
         )
     }
 
-    private fun applyConnectedWifiStepState(host: String) {
-        saveDraftLocally(discoveredHost = host)
+    private fun applyConnectedWifiStepState(host: String, verifiedDeviceId: String = "") {
+        if (!saveDraftLocally(discoveredHost = host, discoveredDeviceId = verifiedDeviceId)) {
+            return
+        }
         val updatedDraft = configStore.loadDraft().copy(
             wifiReconnectPending = false,
             setupCompleted = true,
@@ -1472,7 +1525,7 @@ class MainActivity : AppCompatActivity() {
                 RobotConnectivityDecisionType.CONNECTED_LOCALLY -> {
                     val host = panelDecision.localHost.ifBlank { reachability.localHost.orEmpty() }
                     if (host.isNotBlank()) {
-                        applyConnectedWifiStepState(host)
+                        applyConnectedWifiStepState(host, verifiedDeviceId = reachability.localDeviceId)
                         return@launch
                     }
                 }
@@ -1587,6 +1640,7 @@ class MainActivity : AppCompatActivity() {
                     snapshot = reachability.panelSnapshot,
                     messagePrefix = getString(R.string.wifi_robot_already_connected_panel),
                     verifiedLocalHost = reachability.localHost.orEmpty(),
+                    verifiedLocalDeviceId = reachability.localDeviceId,
                 )
             ) {
                 return@launch
@@ -1595,7 +1649,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun maybeHandleRobotFound(host: String, statusText: String, toastText: String? = null) {
+    private fun maybeHandleRobotFound(
+        host: String,
+        statusText: String,
+        toastText: String? = null,
+        verifiedDeviceId: String = "",
+        savedDeviceIdIsAuthoritative: Boolean = true,
+    ) {
         awaitingRobotProvision = false
         robotWifiPortalSubmitted = false
         pendingRobotWifiConnection = false
@@ -1604,7 +1664,15 @@ class MainActivity : AppCompatActivity() {
         wifiStepStatusJob = null
         cancelMenuStabilization()
         wifiBackToMenuMode = false
-        saveDraftLocally(discoveredHost = host)
+        if (
+            !saveDraftLocally(
+                discoveredHost = host,
+                discoveredDeviceId = verifiedDeviceId,
+                savedDeviceIdIsAuthoritative = savedDeviceIdIsAuthoritative,
+            )
+        ) {
+            return
+        }
         val updatedDraft = configStore.loadDraft().copy(
             wifiReconnectPending = false,
             setupCompleted = true,
@@ -1701,6 +1769,7 @@ class MainActivity : AppCompatActivity() {
         snapshot: RobotRuntimeSnapshot?,
         messagePrefix: String,
         verifiedLocalHost: String = "",
+        verifiedLocalDeviceId: String = "",
     ): Boolean {
         val decision = RobotConnectivityResolver.resolveVerifiedReachability(
             panelSnapshot = snapshot,
@@ -1711,6 +1780,7 @@ class MainActivity : AppCompatActivity() {
             transition = connectedTransition,
             statusText = messagePrefix,
             toastText = getString(R.string.wifi_robot_already_connected_toast),
+            verifiedDeviceId = verifiedLocalDeviceId,
         )
     }
 
@@ -1816,6 +1886,7 @@ class MainActivity : AppCompatActivity() {
         statusText: String,
         toastText: String? = null,
         preserveMenuRecoveryRetry: Boolean = false,
+        verifiedDeviceId: String = "",
     ): Boolean {
         return when (transition.route) {
             ConnectedMenuRoute.LOCAL_HOST -> {
@@ -1825,7 +1896,8 @@ class MainActivity : AppCompatActivity() {
                 maybeHandleRobotFound(
                     host = transition.localHost,
                     statusText = statusText,
-                    toastText = toastText
+                    toastText = toastText,
+                    verifiedDeviceId = verifiedDeviceId,
                 )
                 true
             }
@@ -1955,6 +2027,7 @@ class MainActivity : AppCompatActivity() {
             var provisionPanelState = ProvisionPanelState(
                 panelOnlySeen = false,
                 localHostHint = "",
+                deviceIdHint = "",
             )
             repeat(totalAttempts) { index ->
                 val currentSsid = WifiInfoHelper.currentSsid(this@MainActivity)
@@ -1997,7 +2070,8 @@ class MainActivity : AppCompatActivity() {
 
                     is ProvisionAttemptPlan.WaitForHomeWifi -> {
                         if (plan.shouldCheckPanel) {
-                            when (val panelPlan = provisionPanelSignalPlan(resolveRobotViaPanel())) {
+                            val panelSnapshot = resolveRobotViaPanel()
+                            when (val panelPlan = provisionPanelSignalPlan(panelSnapshot)) {
                                 is ProvisionPanelSignalPlan.CompleteWithLocalHost -> {
                                     maybeHandleRobotFound(
                                         host = panelPlan.localHost,
@@ -2013,6 +2087,8 @@ class MainActivity : AppCompatActivity() {
                                         localHostHint = panelPlan.localHostHint.ifBlank {
                                             provisionPanelState.localHostHint
                                         },
+                                        deviceIdHint = panelSnapshot?.deviceId.orEmpty()
+                                            .ifBlank { provisionPanelState.deviceIdHint },
                                     )
                                 }
 
@@ -2037,7 +2113,8 @@ class MainActivity : AppCompatActivity() {
                             diagnosticsPanel = getString(R.string.diagnostics_waiting)
                             renderDiagnostics()
                             updateProvisionProgress(getString(R.string.loading_body_check))
-                            when (val panelPlan = provisionPanelSignalPlan(resolveRobotViaPanel())) {
+                            val panelSnapshot = resolveRobotViaPanel()
+                            when (val panelPlan = provisionPanelSignalPlan(panelSnapshot)) {
                                 is ProvisionPanelSignalPlan.CompleteWithLocalHost -> {
                                     maybeHandleRobotFound(
                                         host = panelPlan.localHost,
@@ -2053,6 +2130,8 @@ class MainActivity : AppCompatActivity() {
                                         localHostHint = panelPlan.localHostHint.ifBlank {
                                             provisionPanelState.localHostHint
                                         },
+                                        deviceIdHint = panelSnapshot?.deviceId.orEmpty()
+                                            .ifBlank { provisionPanelState.deviceIdHint },
                                     )
                                 }
 
@@ -2093,25 +2172,30 @@ class MainActivity : AppCompatActivity() {
                             )
                         )
                         val draft = configStore.loadDraft()
-                        val (host, _) = discoverRobotLocally(
-                            subnetPrefix,
-                            preferredDiscoveryHosts(
-                                draft,
-                                listOf(provisionPanelState.localHostHint),
-                            ),
+                        val savedDeviceIdIsAuthoritative =
+                            currentBundle?.selfhostXiaozhi?.deviceId?.isNotBlank() == true
+                        val reachability = resolvePanelAndLocalReachability(
+                            draft = draft,
+                            subnetPrefix = subnetPrefix,
                             allowGenericSweep = true,
-                            expectedDeviceId = draft.expectedDeviceId,
+                            savedDeviceIdIsAuthoritative = savedDeviceIdIsAuthoritative,
+                            panelDeviceIdHint = provisionPanelState.deviceIdHint,
+                            panelLocalHostHint = provisionPanelState.localHostHint,
                         )
+                        val host = reachability.localHost
                         if (!host.isNullOrBlank()) {
                             maybeHandleRobotFound(
                                 host = host,
                                 statusText = getString(R.string.wifi_robot_found_network),
-                                toastText = getString(R.string.wifi_robot_found_toast)
+                                toastText = getString(R.string.wifi_robot_found_toast),
+                                verifiedDeviceId = reachability.localDeviceId,
+                                savedDeviceIdIsAuthoritative = savedDeviceIdIsAuthoritative,
                             )
                             return@launch
                         }
                         if (plan.shouldCheckPanelAfterDiscovery) {
-                            when (val panelPlan = provisionPanelSignalPlan(resolveRobotViaPanel())) {
+                            val panelSnapshot = reachability.panelSnapshot
+                            when (val panelPlan = provisionPanelSignalPlan(panelSnapshot)) {
                                 is ProvisionPanelSignalPlan.CompleteWithLocalHost -> {
                                     maybeHandleRobotFound(
                                         host = panelPlan.localHost,
@@ -2127,6 +2211,8 @@ class MainActivity : AppCompatActivity() {
                                         localHostHint = panelPlan.localHostHint.ifBlank {
                                             provisionPanelState.localHostHint
                                         },
+                                        deviceIdHint = panelSnapshot?.deviceId.orEmpty()
+                                            .ifBlank { provisionPanelState.deviceIdHint },
                                     )
                                     updateLocalDiagnostics(
                                         getString(R.string.diagnostics_local_platform_only_retrying)
@@ -2225,12 +2311,17 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val draft = configStore.loadDraft()
-                val (host, _) = discoverRobotLocally(subnetPrefix, listOf(draft.robotHost))
+                val (host, _) = discoverRobotLocally(
+                    subnetPrefix = subnetPrefix,
+                    preferredHosts = listOf(draft.robotHost),
+                    expectedDeviceId = draft.expectedDeviceId,
+                )
                 if (!host.isNullOrBlank()) {
                     maybeHandleRobotFound(
                         host = host,
                         statusText = getString(R.string.wifi_robot_found_network),
-                        toastText = getString(R.string.wifi_robot_already_connected_toast)
+                        toastText = getString(R.string.wifi_robot_already_connected_toast),
+                        verifiedDeviceId = draft.expectedDeviceId,
                     )
                     return@launch
                 }
@@ -2370,6 +2461,7 @@ class MainActivity : AppCompatActivity() {
                     snapshot = reachability.panelSnapshot,
                     messagePrefix = getString(R.string.wifi_robot_already_connected_panel),
                     verifiedLocalHost = reachability.localHost.orEmpty(),
+                    verifiedLocalDeviceId = reachability.localDeviceId,
                 )
             ) {
                 return@launch
@@ -2490,6 +2582,7 @@ class MainActivity : AppCompatActivity() {
                 host = reachability.localHost,
                 statusText = getString(R.string.wifi_robot_found_network),
                 toastText = null,
+                verifiedDeviceId = reachability.localDeviceId,
             )
             return
         }

@@ -15,6 +15,7 @@ internal data class FreshRobotWsSuccess(
     val host: String,
     val source: String,
     val ageMs: Long,
+    val expectedDeviceId: String,
 )
 
 object LocalRobotProbeCoordinator {
@@ -118,10 +119,12 @@ object LocalRobotProbeCoordinator {
     internal fun recordSuccessfulServiceHost(
         host: String,
         source: String,
+        expectedDeviceId: String,
         nowMs: Long = System.currentTimeMillis(),
     ) {
         val normalizedHost = host.trim()
-        if (normalizedHost.isBlank()) {
+        val normalizedExpectedDeviceId = LocalRobotIdentityProbe.normalizeDeviceId(expectedDeviceId)
+        if (normalizedHost.isBlank() || normalizedExpectedDeviceId.isBlank()) {
             return
         }
 
@@ -129,6 +132,7 @@ object LocalRobotProbeCoordinator {
             lastSuccessfulServiceHost = SuccessfulServiceHost(
                 host = normalizedHost,
                 source = source,
+                expectedDeviceId = normalizedExpectedDeviceId,
                 recordedAtMs = nowMs,
             )
         }
@@ -137,15 +141,17 @@ object LocalRobotProbeCoordinator {
     internal fun freshSuccessfulServiceHost(
         subnetPrefix: String,
         preferredHosts: List<String>,
+        expectedDeviceId: String,
         maxAgeMs: Long = DEFAULT_SERVICE_SUCCESS_REUSE_TTL_MS,
         nowMs: () -> Long = { System.currentTimeMillis() },
     ): FreshRobotWsSuccess? {
         val normalizedSubnet = subnetPrefix.trim()
+        val normalizedExpectedDeviceId = LocalRobotIdentityProbe.normalizeDeviceId(expectedDeviceId)
         val preferred = preferredHosts
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .toSet()
-        if (normalizedSubnet.isBlank() || preferred.isEmpty()) {
+        if (normalizedSubnet.isBlank() || normalizedExpectedDeviceId.isBlank() || preferred.isEmpty()) {
             return null
         }
 
@@ -162,10 +168,14 @@ object LocalRobotProbeCoordinator {
             if (success.host !in preferred) {
                 return null
             }
+            if (success.expectedDeviceId != normalizedExpectedDeviceId) {
+                return null
+            }
             return FreshRobotWsSuccess(
                 host = success.host,
                 source = success.source,
                 ageMs = ageMs,
+                expectedDeviceId = success.expectedDeviceId,
             )
         }
     }
@@ -222,6 +232,7 @@ object LocalRobotProbeCoordinator {
     private data class SuccessfulServiceHost(
         val host: String,
         val source: String,
+        val expectedDeviceId: String,
         val recordedAtMs: Long,
     )
 

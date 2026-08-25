@@ -11,12 +11,11 @@ import org.junit.Test
 
 class LocalRobotDiscoveryTest {
     @Test
-    fun `tcp prefilter stays parallel while websocket confirmations are sequential`() = runBlocking {
+    fun `tcp prefilter stays parallel while identity confirmations are sequential`() = runBlocking {
         val tcpInFlight = AtomicInteger(0)
         val maxTcpInFlight = AtomicInteger(0)
-        val wsInFlight = AtomicInteger(0)
-        val maxWsInFlight = AtomicInteger(0)
-        val wsHosts = Collections.synchronizedList(mutableListOf<String>())
+        val identityInFlight = AtomicInteger(0)
+        val maxIdentityInFlight = AtomicInteger(0)
         val identityHosts = Collections.synchronizedList(mutableListOf<String>())
         val candidateSuffixes = setOf(".100", ".101", ".102")
 
@@ -28,16 +27,13 @@ class LocalRobotDiscoveryTest {
                 tcpInFlight.decrementAndGet()
                 candidateSuffixes.any { host.endsWith(it) }
             },
-            isWsOpen = { _, host, _ ->
-                val current = wsInFlight.incrementAndGet()
-                maxWsInFlight.updateAndGet { previous -> maxOf(previous, current) }
-                wsHosts.add(host)
-                delay(25L)
-                wsInFlight.decrementAndGet()
-                host.endsWith(".102")
-            },
+            isWsOpen = { _, _, _ -> error("identity-aware discovery must not use ws-only confirmation") },
             matchesDeviceIdentity = { _, host, expectedDeviceId, _ ->
+                val current = identityInFlight.incrementAndGet()
+                maxIdentityInFlight.updateAndGet { previous -> maxOf(previous, current) }
                 identityHosts.add("$host:$expectedDeviceId")
+                delay(25L)
+                identityInFlight.decrementAndGet()
                 host.endsWith(".102") && expectedDeviceId == "aa:bb:cc:dd:ee:ff"
             },
         )
@@ -51,12 +47,15 @@ class LocalRobotDiscoveryTest {
 
         assertEquals("192.168.1.102", result.first)
         assertTrue("TCP prefilter was not parallel", maxTcpInFlight.get() > 1)
-        assertEquals(1, maxWsInFlight.get())
+        assertEquals(1, maxIdentityInFlight.get())
         assertEquals(
-            listOf("192.168.1.100", "192.168.1.101", "192.168.1.102"),
-            wsHosts.toList(),
+            listOf(
+                "192.168.1.100:aa:bb:cc:dd:ee:ff",
+                "192.168.1.101:aa:bb:cc:dd:ee:ff",
+                "192.168.1.102:aa:bb:cc:dd:ee:ff",
+            ),
+            identityHosts.toList(),
         )
-        assertEquals(listOf("192.168.1.102:aa:bb:cc:dd:ee:ff"), identityHosts.toList())
     }
 
     @Test
@@ -67,9 +66,7 @@ class LocalRobotDiscoveryTest {
                 tcpCalls.incrementAndGet()
                 host.endsWith(".102")
             },
-            isWsOpen = { _, host, _ ->
-                host.endsWith(".102")
-            },
+            isWsOpen = { _, _, _ -> error("generic identity-aware discovery must not use ws-only confirmation") },
             matchesDeviceIdentity = { _, host, expectedDeviceId, _ ->
                 host.endsWith(".102") && expectedDeviceId == "aa:bb:cc:dd:ee:ff"
             },
@@ -96,13 +93,14 @@ class LocalRobotDiscoveryTest {
     }
 
     @Test
-    fun `preferred host is checked while generic sweep remains disabled`() = runBlocking {
+    fun `preferred host requires matching device identity while generic sweep remains disabled`() = runBlocking {
         val checkedHosts = Collections.synchronizedList(mutableListOf<String>())
         val hooks = LocalRobotDiscoveryProbeHooks(
             isPortOpen = { _, _, _, _ -> error("TCP prefilter must not run without generic sweep") },
-            isWsOpen = { _, host, _ ->
-                checkedHosts.add(host)
-                host.endsWith(".159")
+            isWsOpen = { _, _, _ -> error("preferred identity-aware discovery must not use ws-only confirmation") },
+            matchesDeviceIdentity = { _, host, expectedDeviceId, _ ->
+                checkedHosts.add("$host:$expectedDeviceId")
+                host.endsWith(".159") && expectedDeviceId == "aa:bb:cc:dd:ee:ff"
             },
         )
 
@@ -111,14 +109,39 @@ class LocalRobotDiscoveryTest {
             preferredHosts = listOf("192.168.1.159"),
             probeHooks = hooks,
             allowGenericSweep = false,
+            expectedDeviceId = "aa:bb:cc:dd:ee:ff",
         )
 
         assertEquals("192.168.1.159", result.first)
-        assertEquals(listOf("192.168.1.159"), checkedHosts.toList())
+        assertEquals(listOf("192.168.1.159:aa:bb:cc:dd:ee:ff"), checkedHosts.toList())
     }
 
     @Test
-    fun `generic subnet sweep requires expected device id`() = runBlocking {
+    fun `preferred host rejects mismatched device identity without generic sweep`() = runBlocking {
+        val identityHosts = Collections.synchronizedList(mutableListOf<String>())
+        val hooks = LocalRobotDiscoveryProbeHooks(
+            isPortOpen = { _, _, _, _ -> error("TCP prefilter must not run without generic sweep") },
+            isWsOpen = { _, _, _ -> error("preferred identity-aware discovery must not use ws-only confirmation") },
+            matchesDeviceIdentity = { _, host, expectedDeviceId, _ ->
+                identityHosts.add("$host:$expectedDeviceId")
+                false
+            },
+        )
+
+        val result = LocalRobotDiscovery.discover(
+            subnetPrefix = "192.168.1",
+            preferredHosts = listOf("192.168.1.159"),
+            probeHooks = hooks,
+            allowGenericSweep = false,
+            expectedDeviceId = "aa:bb:cc:dd:ee:ff",
+        )
+
+        assertNull(result.first)
+        assertEquals(listOf("192.168.1.159:aa:bb:cc:dd:ee:ff"), identityHosts.toList())
+    }
+
+    @Test
+    fun `local discovery requires expected device id`() = runBlocking {
         val tcpCalls = AtomicInteger(0)
         val hooks = LocalRobotDiscoveryProbeHooks(
             isPortOpen = { _, _, _, _ ->
@@ -130,6 +153,7 @@ class LocalRobotDiscoveryTest {
 
         val result = LocalRobotDiscovery.discover(
             subnetPrefix = "192.168.1",
+            preferredHosts = listOf("192.168.1.159"),
             probeHooks = hooks,
             allowGenericSweep = true,
             expectedDeviceId = "",
@@ -146,9 +170,7 @@ class LocalRobotDiscoveryTest {
             isPortOpen = { _, host, _, _ ->
                 host.endsWith(".102") || host.endsWith(".103")
             },
-            isWsOpen = { _, host, _ ->
-                host.endsWith(".102") || host.endsWith(".103")
-            },
+            isWsOpen = { _, _, _ -> error("generic identity-aware discovery must not use ws-only confirmation") },
             matchesDeviceIdentity = { _, host, expectedDeviceId, _ ->
                 identityHosts.add("$host:$expectedDeviceId")
                 host.endsWith(".103") && expectedDeviceId == "aa:bb:cc:dd:ee:ff"

@@ -87,6 +87,7 @@ class LocalRobotProbeCoordinatorTest {
             LocalRobotProbeCoordinator.recordSuccessfulServiceHost(
                 host = "192.168.1.159",
                 source = "ConnectorForegroundService.probeRobotWs",
+                expectedDeviceId = "aa:bb:cc:dd:ee:ff",
                 nowMs = now,
             )
             "service"
@@ -101,6 +102,7 @@ class LocalRobotProbeCoordinatorTest {
             LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
                 subnetPrefix = "192.168.1",
                 preferredHosts = listOf("192.168.1.159"),
+                expectedDeviceId = "aa:bb:cc:dd:ee:ff",
                 nowMs = { now },
             )?.host ?: "manual-scan"
         }
@@ -113,6 +115,7 @@ class LocalRobotProbeCoordinatorTest {
         LocalRobotProbeCoordinator.recordSuccessfulServiceHost(
             host = "192.168.1.159",
             source = "ConnectorForegroundService.probeRobotWs",
+            expectedDeviceId = "aa:bb:cc:dd:ee:ff",
             nowMs = 1_000L,
         )
 
@@ -120,6 +123,7 @@ class LocalRobotProbeCoordinatorTest {
             LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
                 subnetPrefix = "192.168.1",
                 preferredHosts = listOf("192.168.1.160"),
+                expectedDeviceId = "aa:bb:cc:dd:ee:ff",
                 nowMs = { 1_500L },
             )
         )
@@ -127,6 +131,7 @@ class LocalRobotProbeCoordinatorTest {
             LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
                 subnetPrefix = "192.168.2",
                 preferredHosts = listOf("192.168.1.159"),
+                expectedDeviceId = "aa:bb:cc:dd:ee:ff",
                 nowMs = { 1_500L },
             )
         )
@@ -134,9 +139,47 @@ class LocalRobotProbeCoordinatorTest {
             LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
                 subnetPrefix = "192.168.1",
                 preferredHosts = listOf("192.168.1.159"),
+                expectedDeviceId = "aa:bb:cc:dd:ee:ff",
                 nowMs = { 7_000L },
             )
         )
+    }
+
+    @Test
+    fun `service host reuse requires same verified device id`() {
+        LocalRobotProbeCoordinator.recordSuccessfulServiceHost(
+            host = "192.168.1.159",
+            source = "ConnectorForegroundService.probeRobotWs",
+            expectedDeviceId = "aa:bb:cc:dd:ee:ff",
+            nowMs = 1_000L,
+        )
+
+        assertNull(
+            LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
+                subnetPrefix = "192.168.1",
+                preferredHosts = listOf("192.168.1.159"),
+                expectedDeviceId = "",
+                nowMs = { 1_500L },
+            )
+        )
+        assertNull(
+            LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
+                subnetPrefix = "192.168.1",
+                preferredHosts = listOf("192.168.1.159"),
+                expectedDeviceId = "11:22:33:44:55:66",
+                nowMs = { 1_500L },
+            )
+        )
+
+        val matching = LocalRobotProbeCoordinator.freshSuccessfulServiceHost(
+            subnetPrefix = "192.168.1",
+            preferredHosts = listOf("192.168.1.159"),
+            expectedDeviceId = "AA:BB:CC:DD:EE:FF",
+            nowMs = { 1_500L },
+        )
+        requireNotNull(matching)
+        assertEquals("192.168.1.159", matching.host)
+        assertEquals("aa:bb:cc:dd:ee:ff", matching.expectedDeviceId)
     }
 
     @Test

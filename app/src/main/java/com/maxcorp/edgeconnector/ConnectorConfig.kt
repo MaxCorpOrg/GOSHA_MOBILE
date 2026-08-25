@@ -45,6 +45,7 @@ private const val K_PREFERRED_BACKEND_MODE = "preferred_backend_mode"
 private const val K_ROBOT_WIFI_PREFIXES = "robot_wifi_prefixes"
 private const val K_CONNECTOR_HUB_URL = "connector_hub_url"
 private const val K_CONNECTOR_ROBOT_ID = "connector_robot_id"
+private const val K_CONNECTOR_EXPECTED_DEVICE_ID = "connector_expected_device_id"
 private const val K_CONNECTOR_TOKEN = "connector_token"
 private const val K_CONNECTOR_ROBOT_HOST = "connector_robot_host"
 private const val K_CONNECTOR_ROBOT_PORT = "connector_robot_port"
@@ -108,9 +109,145 @@ internal fun parseCloudEndpoint(rawUrl: String): CloudEndpointParts {
     }
 }
 
+internal data class RuntimeEndpointMerge(
+    val panelBaseUrl: String,
+    val hubBaseUrl: String,
+    val cloudEndpoint: String,
+    val robotId: String,
+    val token: String,
+)
+
+internal data class DeviceIdentityExpectation(
+    val deviceId: String,
+    val conflictReason: String = "",
+) {
+    val hasConflict: Boolean get() = conflictReason.isNotBlank()
+    val canVerify: Boolean get() = deviceId.isNotBlank() && !hasConflict
+}
+
+internal fun mergeRuntimeEndpointConfig(
+    current: OnboardingDraft,
+    panelBaseUrl: String,
+    edgeHubUrl: String?,
+    cloudEndpoint: String,
+    robotId: String,
+): RuntimeEndpointMerge {
+    val resolvedCloudEndpoint = cloudEndpoint.takeIf { it.isNotBlank() } ?: current.cloudEndpoint
+    val cloudEndpointParts = parseCloudEndpoint(resolvedCloudEndpoint)
+    val edgeHubParts = parseCloudEndpoint(edgeHubUrl.orEmpty())
+    val resolvedHubBaseUrl = if (edgeHubUrl == null) {
+        current.hubBaseUrl
+    } else {
+        edgeHubParts.hubBaseUrl.takeIf { it.isNotBlank() }
+            ?: edgeHubUrl.trim().substringBefore('?')
+    }
+    return RuntimeEndpointMerge(
+        panelBaseUrl = panelBaseUrl.takeIf { it.isNotBlank() } ?: current.panelBaseUrl,
+        hubBaseUrl = resolvedHubBaseUrl,
+        cloudEndpoint = resolvedCloudEndpoint,
+        robotId = robotId.takeIf { it.isNotBlank() }
+            ?: cloudEndpointParts.robotId.takeIf { it.isNotBlank() }
+            ?: current.robotId,
+        token = edgeHubParts.token.takeIf { it.isNotBlank() }
+            ?: cloudEndpointParts.token.takeIf { it.isNotBlank() }
+            ?: current.token,
+    )
+}
+
+internal fun resolveDiscoveryExpectedDeviceIdentity(
+    panelSnapshot: RobotRuntimeSnapshot?,
+    draft: OnboardingDraft,
+    bundleDeviceId: String? = null,
+    savedDeviceIdIsAuthoritative: Boolean = true,
+    panelDeviceIdHint: String? = null,
+): DeviceIdentityExpectation {
+    val panelDeviceId = normalizedDeviceId(panelSnapshot?.deviceId ?: panelDeviceIdHint.orEmpty())
+    val explicitBundleDeviceId = normalizedDeviceId(bundleDeviceId.orEmpty())
+    val savedDeviceId = normalizedDeviceId(draft.expectedDeviceId)
+    val authoritativeDeviceId = explicitBundleDeviceId.ifBlank {
+        if (savedDeviceIdIsAuthoritative) savedDeviceId else ""
+    }
+
+    if (
+        authoritativeDeviceId.isNotBlank() &&
+        panelDeviceId.isNotBlank() &&
+        authoritativeDeviceId != panelDeviceId
+    ) {
+        return DeviceIdentityExpectation(
+            deviceId = authoritativeDeviceId,
+            conflictReason = "device identity mismatch",
+        )
+    }
+
+    return DeviceIdentityExpectation(
+        deviceId = authoritativeDeviceId.ifBlank {
+            panelDeviceId.ifBlank {
+                savedDeviceId
+            }
+        }
+    )
+}
+
+internal fun resolveDiscoveryExpectedDeviceId(
+    panelSnapshot: RobotRuntimeSnapshot?,
+    draft: OnboardingDraft,
+): String {
+    return resolveDiscoveryExpectedDeviceIdentity(panelSnapshot, draft).deviceId
+}
+
+internal fun resolveSavedExpectedDeviceIdentity(
+    current: OnboardingDraft,
+    bundleDeviceId: String?,
+    verifiedLocalDeviceId: String?,
+    savedDeviceIdIsAuthoritative: Boolean = true,
+): DeviceIdentityExpectation {
+    val verifiedDeviceId = normalizedDeviceId(verifiedLocalDeviceId.orEmpty())
+    val explicitBundleDeviceId = normalizedDeviceId(bundleDeviceId.orEmpty())
+    val savedDeviceId = normalizedDeviceId(current.expectedDeviceId)
+    val authoritativeDeviceId = explicitBundleDeviceId.ifBlank {
+        if (savedDeviceIdIsAuthoritative) savedDeviceId else ""
+    }
+
+    if (
+        authoritativeDeviceId.isNotBlank() &&
+        verifiedDeviceId.isNotBlank() &&
+        authoritativeDeviceId != verifiedDeviceId
+    ) {
+        return DeviceIdentityExpectation(
+            deviceId = authoritativeDeviceId,
+            conflictReason = "device identity mismatch",
+        )
+    }
+
+    return DeviceIdentityExpectation(
+        deviceId = verifiedDeviceId.ifBlank {
+            authoritativeDeviceId.ifBlank {
+                savedDeviceId
+            }
+        }
+    )
+}
+
+internal fun resolveSavedExpectedDeviceId(
+    current: OnboardingDraft,
+    bundleDeviceId: String?,
+    verifiedLocalDeviceId: String?,
+): String {
+    return resolveSavedExpectedDeviceIdentity(
+        current = current,
+        bundleDeviceId = bundleDeviceId,
+        verifiedLocalDeviceId = verifiedLocalDeviceId,
+    ).deviceId
+}
+
+private fun normalizedDeviceId(value: String): String {
+    return value.trim().lowercase()
+}
+
 data class ConnectorConfig(
     val hubBaseUrl: String,
     val robotId: String,
+    val expectedDeviceId: String = "",
     val token: String,
     val robotHost: String,
     val robotPort: Int,
@@ -134,6 +271,7 @@ data class ConnectorConfig(
         return scheme in setOf("ws", "wss") &&
             !base.host.isNullOrBlank() &&
             robotId.isNotBlank() &&
+            expectedDeviceId.isNotBlank() &&
             token.isNotBlank() &&
             robotHost.isNotBlank()
     }
@@ -147,6 +285,7 @@ data class ConnectorConfig(
         return intent
             .putExtra(ConnectorForegroundService.EXTRA_HUB_URL, hubBaseUrl)
             .putExtra(ConnectorForegroundService.EXTRA_ROBOT_ID, robotId)
+            .putExtra(ConnectorForegroundService.EXTRA_EXPECTED_DEVICE_ID, expectedDeviceId)
             .putExtra(ConnectorForegroundService.EXTRA_TOKEN, token)
             .putExtra(ConnectorForegroundService.EXTRA_ROBOT_HOST, robotHost)
             .putExtra(ConnectorForegroundService.EXTRA_ROBOT_PORT, robotPort)
@@ -167,6 +306,7 @@ data class ConnectorConfig(
         fun fromIntent(intent: Intent): ConnectorConfig? {
             val hubUrl = intent.getStringExtra(ConnectorForegroundService.EXTRA_HUB_URL).orEmpty()
             val robotId = intent.getStringExtra(ConnectorForegroundService.EXTRA_ROBOT_ID).orEmpty()
+            val expectedDeviceId = intent.getStringExtra(ConnectorForegroundService.EXTRA_EXPECTED_DEVICE_ID).orEmpty()
             val token = intent.getStringExtra(ConnectorForegroundService.EXTRA_TOKEN).orEmpty()
             val robotHost = sanitizeRobotHost(intent.getStringExtra(ConnectorForegroundService.EXTRA_ROBOT_HOST).orEmpty())
             val robotPort = intent.getIntExtra(ConnectorForegroundService.EXTRA_ROBOT_PORT, 8080)
@@ -177,6 +317,7 @@ data class ConnectorConfig(
             return ConnectorConfig(
                 hubBaseUrl = hubUrl,
                 robotId = robotId,
+                expectedDeviceId = expectedDeviceId,
                 token = token,
                 robotHost = robotHost,
                 robotPort = robotPort,
@@ -208,6 +349,9 @@ class ConfigStore(context: Context) {
         val token = prefs.getString(K_CONNECTOR_TOKEN, "")?.ifBlank {
             prefs.getString(K_TOKEN, "") ?: ""
         } ?: ""
+        val expectedDeviceId = prefs.getString(K_CONNECTOR_EXPECTED_DEVICE_ID, "")?.ifBlank {
+            prefs.getString(K_EXPECTED_DEVICE_ID, "") ?: ""
+        } ?: ""
         val host = sanitizeRobotHost(
             prefs.getString(K_CONNECTOR_ROBOT_HOST, "")?.ifBlank {
                 prefs.getString(K_ROBOT_HOST, "") ?: ""
@@ -226,6 +370,7 @@ class ConfigStore(context: Context) {
         return ConnectorConfig(
             hubBaseUrl = hub,
             robotId = robotId,
+            expectedDeviceId = expectedDeviceId,
             token = token,
             robotHost = host,
             robotPort = port,
@@ -237,6 +382,7 @@ class ConfigStore(context: Context) {
         prefs.edit()
             .putString(K_CONNECTOR_HUB_URL, config.hubBaseUrl)
             .putString(K_CONNECTOR_ROBOT_ID, config.robotId)
+            .putString(K_CONNECTOR_EXPECTED_DEVICE_ID, config.expectedDeviceId)
             .putString(K_CONNECTOR_TOKEN, config.token)
             .putString(K_CONNECTOR_ROBOT_HOST, sanitizeRobotHost(config.robotHost))
             .putInt(K_CONNECTOR_ROBOT_PORT, config.robotPort)
@@ -248,6 +394,7 @@ class ConfigStore(context: Context) {
         prefs.edit()
             .remove(K_CONNECTOR_HUB_URL)
             .remove(K_CONNECTOR_ROBOT_ID)
+            .remove(K_CONNECTOR_EXPECTED_DEVICE_ID)
             .remove(K_CONNECTOR_TOKEN)
             .remove(K_CONNECTOR_ROBOT_HOST)
             .remove(K_CONNECTOR_ROBOT_PORT)
@@ -411,6 +558,7 @@ data class OnboardingDraft(
         return ConnectorConfig(
             hubBaseUrl = hubBaseUrl,
             robotId = robotId,
+            expectedDeviceId = expectedDeviceId,
             token = token,
             robotHost = robotHost,
             robotPort = robotPort,

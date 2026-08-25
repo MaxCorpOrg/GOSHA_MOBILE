@@ -57,6 +57,9 @@ object LocalRobotDiscovery {
             return@coroutineScope null to "Телефон не подключен к Wi‑Fi"
         }
         val expectedId = expectedDeviceId.trim()
+        if (expectedId.isBlank()) {
+            return@coroutineScope null to "Локальный адрес робота не подтверждался без device_id устройства"
+        }
 
         val worker = Dispatchers.IO.limitedParallelism(DISCOVERY_PARALLELISM)
         val preferred = preferredHosts
@@ -73,6 +76,8 @@ object LocalRobotDiscovery {
                     tcpTimeoutMs = PREFERRED_TCP_PROBE_TIMEOUT_MS,
                     wsTimeoutMs = PREFERRED_WS_PROBE_TIMEOUT_MS,
                     skipPortPrefilter = true,
+                    expectedDeviceId = expectedId,
+                    requireIdentityMatch = true,
                     probeHooks = probeHooks,
                 )
             }
@@ -84,10 +89,6 @@ object LocalRobotDiscovery {
         if (!allowGenericSweep) {
             return@coroutineScope null to "Робот не найден по закреплённому адресу; общий поиск по сети не запускался"
         }
-        if (expectedId.isBlank()) {
-            return@coroutineScope null to "Общий поиск по сети не запускался без device_id для проверки устройства"
-        }
-
         // Для домашних DHCP-сетей чаще всего полезен широкий коридор 100..180.
         val commonRange = (100..180).toList() + listOf(10, 20, 30, 50, 60, 70, 80, 90, 190, 200, 210)
         val priority = (preferred + commonRange + (1..254)).distinct()
@@ -143,15 +144,16 @@ object LocalRobotDiscovery {
             if (!skipPortPrefilter && !probeHooks.isPortOpen(factory, host, 8080, tcpTimeoutMs)) {
                 continue
             }
+            if (requireIdentityMatch) {
+                if (probeHooks.matchesDeviceIdentity(factory, host, expectedDeviceId, wsTimeoutMs)) {
+                    return true
+                }
+                continue
+            }
             if (!probeHooks.isWsOpen(factory, host, wsTimeoutMs)) {
                 continue
             }
-            if (!requireIdentityMatch) {
-                return true
-            }
-            if (probeHooks.matchesDeviceIdentity(factory, host, expectedDeviceId, wsTimeoutMs)) {
-                return true
-            }
+            return true
         }
         return false
     }

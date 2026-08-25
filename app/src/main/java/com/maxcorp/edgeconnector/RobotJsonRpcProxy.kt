@@ -11,17 +11,23 @@ import org.json.JSONObject
 import java.io.IOException
 
 object RobotJsonRpcProxy {
+    private const val IDENTITY_REQUEST_ID = "gosha-mobile-command-identity-probe"
+    private const val IDENTITY_REQUEST_TYPE = "gosha.identity.get"
+    private const val IDENTITY_RESULT_TYPE = "gosha.identity.result"
+
     suspend fun call(
         http: OkHttpClient,
         robotWsUrl: String,
         payload: JSONObject,
+        expectedDeviceId: String = "",
         timeoutMs: Long = 8_000,
     ): JSONObject {
+        val normalizedExpectedDeviceId = requireExpectedDeviceId(expectedDeviceId)
         return when (
             val run = LocalRobotProbeCoordinator.runFunctionalCommand(
                 source = "RobotJsonRpcProxy.call",
             ) {
-                callDirect(http, robotWsUrl, payload, timeoutMs)
+                callDirect(http, robotWsUrl, payload, normalizedExpectedDeviceId, timeoutMs)
             }
         ) {
             is LocalRobotProbeRun.Executed -> run.value
@@ -33,6 +39,7 @@ object RobotJsonRpcProxy {
         http: OkHttpClient,
         robotWsUrl: String,
         payload: JSONObject,
+        expectedDeviceId: String,
         timeoutMs: Long,
     ): JSONObject {
         val reqId = normalizeId(payload.opt("id"))
@@ -40,12 +47,13 @@ object RobotJsonRpcProxy {
 
         val result = CompletableDeferred<JSONObject>()
         val request = Request.Builder().url(robotWsUrl).build()
+        val identityRequest = identityRequestPayload()
+        var identityVerified = false
 
         val ws = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                val sent = webSocket.send(payload.toString())
-                if (!sent && !result.isCompleted) {
-                    result.completeExceptionally(IOException("failed to send payload to robot"))
+                if (!webSocket.send(identityRequest.toString()) && !result.isCompleted) {
+                    result.completeExceptionally(IOException("failed to send identity probe to robot"))
                 }
             }
 
@@ -53,6 +61,21 @@ object RobotJsonRpcProxy {
                 val obj = try {
                     JSONObject(text)
                 } catch (_: Exception) {
+                    return
+                }
+                if (!identityVerified) {
+                    val identityMatches = identityMatch(obj, expectedDeviceId) ?: return
+                    if (!identityMatches) {
+                        if (!result.isCompleted) {
+                            result.completeExceptionally(IOException("device identity mismatch"))
+                        }
+                        webSocket.close(1000, "identity-mismatch")
+                        return
+                    }
+                    identityVerified = true
+                    if (!webSocket.send(payload.toString()) && !result.isCompleted) {
+                        result.completeExceptionally(IOException("failed to send payload to robot"))
+                    }
                     return
                 }
                 val incomingId = normalizeId(obj.opt("id"))
@@ -88,13 +111,15 @@ object RobotJsonRpcProxy {
         http: OkHttpClient,
         robotWsUrl: String,
         payload: JSONObject,
+        expectedDeviceId: String = "",
         timeoutMs: Long = 4_000,
     ) {
+        val normalizedExpectedDeviceId = requireExpectedDeviceId(expectedDeviceId)
         when (
             val run = LocalRobotProbeCoordinator.runFunctionalCommand(
                 source = "RobotJsonRpcProxy.notify",
             ) {
-                notifyDirect(http, robotWsUrl, payload, timeoutMs)
+                notifyDirect(http, robotWsUrl, payload, normalizedExpectedDeviceId, timeoutMs)
             }
         ) {
             is LocalRobotProbeRun.Executed -> return
@@ -106,23 +131,54 @@ object RobotJsonRpcProxy {
         http: OkHttpClient,
         robotWsUrl: String,
         payload: JSONObject,
+        expectedDeviceId: String,
         timeoutMs: Long,
     ) {
         val done = CompletableDeferred<Unit>()
         val request = Request.Builder().url(robotWsUrl).build()
+        val identityRequest = identityRequestPayload()
+        var identityVerified = false
         val ws = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                val sent = webSocket.send(payload.toString())
-                if (!sent) {
-                    if (!done.isCompleted) done.completeExceptionally(IOException("failed to send notify"))
+                if (!webSocket.send(identityRequest.toString()) && !done.isCompleted) {
+                    done.completeExceptionally(IOException("failed to send identity probe to robot"))
+                }
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                val obj = try {
+                    JSONObject(text)
+                } catch (_: Exception) {
                     return
                 }
-                if (!done.isCompleted) done.complete(Unit)
-                webSocket.close(1000, "notify-sent")
+                if (!identityVerified) {
+                    val identityMatches = identityMatch(obj, expectedDeviceId) ?: return
+                    if (!identityMatches) {
+                        if (!done.isCompleted) {
+                            done.completeExceptionally(IOException("device identity mismatch"))
+                        }
+                        webSocket.close(1000, "identity-mismatch")
+                        return
+                    }
+                    identityVerified = true
+                    val sent = webSocket.send(payload.toString())
+                    if (!sent) {
+                        if (!done.isCompleted) done.completeExceptionally(IOException("failed to send notify"))
+                        return
+                    }
+                    if (!done.isCompleted) done.complete(Unit)
+                    webSocket.close(1000, "notify-sent")
+                }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 if (!done.isCompleted) done.completeExceptionally(t)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (!done.isCompleted) {
+                    done.completeExceptionally(IOException("robot websocket closed: $code/$reason"))
+                }
             }
         })
 
@@ -131,6 +187,32 @@ object RobotJsonRpcProxy {
         } finally {
             ws.cancel()
         }
+    }
+
+    private fun requireExpectedDeviceId(expectedDeviceId: String): String {
+        val normalized = LocalRobotIdentityProbe.normalizeDeviceId(expectedDeviceId)
+        if (normalized.isBlank()) {
+            throw IOException("expected_device_id_missing")
+        }
+        return normalized
+    }
+
+    private fun identityRequestPayload(): JSONObject {
+        return JSONObject()
+            .put("type", IDENTITY_REQUEST_TYPE)
+            .put("protocol_version", 1)
+            .put("id", IDENTITY_REQUEST_ID)
+    }
+
+    private fun identityMatch(obj: JSONObject, expectedDeviceId: String): Boolean? {
+        val incomingId = normalizeId(obj.opt("id"))
+        if (incomingId != null && incomingId != IDENTITY_REQUEST_ID) return null
+        if (obj.optString("type", "") != IDENTITY_RESULT_TYPE) return null
+        if (!obj.optBoolean("ok", false)) return false
+        val actual = LocalRobotIdentityProbe.normalizeDeviceId(
+            LocalRobotIdentityProbe.extractDeviceId(obj)
+        )
+        return actual == expectedDeviceId
     }
 
     private fun normalizeId(any: Any?): String? {

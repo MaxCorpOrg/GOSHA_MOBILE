@@ -116,6 +116,9 @@ class ConnectorForegroundService : Service() {
         return WifiBoundHttp.forCurrentWifi(this, httpClient)
     }
 
+    private fun localRobotSocketFactory() =
+        WifiInfoHelper.currentWifiNetwork(this)?.socketFactory
+
     private suspend fun runConnectorLoop(config: ConnectorConfig) {
         var backoffSec = 1L
         val agentUrl = config.agentUrl()
@@ -206,7 +209,12 @@ class ConnectorForegroundService : Service() {
             "mcp_notify" -> {
                 val payload = msg.optJSONObject("payload") ?: return
                 try {
-                    RobotJsonRpcProxy.notify(localRobotHttpClient(), config.robotWsUrl(), payload)
+                    RobotJsonRpcProxy.notify(
+                        http = localRobotHttpClient(),
+                        robotWsUrl = config.robotWsUrl(),
+                        payload = payload,
+                        expectedDeviceId = config.expectedDeviceId,
+                    )
                     setRobotWsState(true, "")
                 } catch (exc: Exception) {
                     publishStatus("notify->robot failed: ${exc.message}")
@@ -219,9 +227,12 @@ class ConnectorForegroundService : Service() {
                 val bridgeId = msg.optString("bridge_id")
                 val payload = msg.optJSONObject("payload") ?: return
                 val responsePayload = try {
-                    RobotJsonRpcProxy.call(localRobotHttpClient(), config.robotWsUrl(), payload).also {
-                        setRobotWsState(true, "")
-                    }
+                    RobotJsonRpcProxy.call(
+                        http = localRobotHttpClient(),
+                        robotWsUrl = config.robotWsUrl(),
+                        payload = payload,
+                        expectedDeviceId = config.expectedDeviceId,
+                    ).also { setRobotWsState(true, "") }
                 } catch (exc: Exception) {
                     setRobotWsState(false, exc.message ?: "request failed")
                     jsonRpcError(payload.opt("id"), "mobile connector error: ${exc.message}")
@@ -283,14 +294,15 @@ class ConnectorForegroundService : Service() {
                 source = SERVICE_PROBE_SOURCE,
                 minIntervalMs = robotWsProbeTracker.serviceMinIntervalMs(),
             ) {
-                RobotWsProbe.probe(localRobotHttpClient(), config.robotWsUrl()).also { probe ->
-                    if (probe.first) {
-                        LocalRobotProbeCoordinator.recordSuccessfulServiceHost(
-                            host = config.robotHost,
-                            source = SERVICE_PROBE_SOURCE,
-                        )
-                    }
+                val probe = probeRobotIdentity(config)
+                if (probe.first) {
+                    LocalRobotProbeCoordinator.recordSuccessfulServiceHost(
+                        host = config.robotHost,
+                        source = SERVICE_PROBE_SOURCE,
+                        expectedDeviceId = config.expectedDeviceId,
+                    )
                 }
+                probe
             }
         ) {
             is LocalRobotProbeRun.Executed -> {
@@ -310,6 +322,30 @@ class ConnectorForegroundService : Service() {
                 "minIntervalMs=${result.serviceMinIntervalMs}"
         )
         return result
+    }
+
+    private suspend fun probeRobotIdentity(config: ConnectorConfig): Pair<Boolean, String> {
+        val expectedDeviceId = config.expectedDeviceId.trim()
+        if (expectedDeviceId.isBlank()) {
+            return false to "expected_device_id_missing"
+        }
+        val ok = matchesRobotIdentity(config)
+        return if (ok) {
+            true to ""
+        } else {
+            false to "device identity mismatch"
+        }
+    }
+
+    private suspend fun matchesRobotIdentity(config: ConnectorConfig): Boolean {
+        return LocalRobotIdentityProbe.matches(
+            socketFactory = localRobotSocketFactory(),
+            host = config.robotHost,
+            expectedDeviceId = config.expectedDeviceId,
+            port = config.robotPort,
+            path = config.robotPath,
+            timeoutMs = 4_000L,
+        )
     }
 
     private suspend fun refreshPanelPresence(
@@ -462,6 +498,7 @@ class ConnectorForegroundService : Service() {
 
         const val EXTRA_HUB_URL = "extra_hub_url"
         const val EXTRA_ROBOT_ID = "extra_robot_id"
+        const val EXTRA_EXPECTED_DEVICE_ID = "extra_expected_device_id"
         const val EXTRA_TOKEN = "extra_token"
         const val EXTRA_ROBOT_HOST = "extra_robot_host"
         const val EXTRA_ROBOT_PORT = "extra_robot_port"

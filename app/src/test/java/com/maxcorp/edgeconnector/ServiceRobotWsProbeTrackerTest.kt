@@ -50,6 +50,32 @@ class ServiceRobotWsProbeTrackerTest {
     }
 
     @Test
+    fun `foreground presence is not published after identity mismatch`() {
+        val tracker = ServiceRobotWsProbeTracker(cacheTtlMs = 10_000L, baseMinIntervalMs = 10_000L)
+
+        val mismatch = tracker.recordExecuted(
+            ok = false,
+            error = "device identity mismatch",
+            nowMs = 1_000L,
+        )
+
+        assertEquals(ServiceRobotWsProbeState.EXECUTED, mismatch.state)
+        assertEquals(false, mismatch.ok)
+        assertFalse(mismatch.canPublishPresence)
+    }
+
+    @Test
+    fun `foreground presence is published only after executed identity match`() {
+        val tracker = ServiceRobotWsProbeTracker(cacheTtlMs = 10_000L, baseMinIntervalMs = 10_000L)
+
+        val verified = tracker.recordExecuted(ok = true, error = "", nowMs = 1_000L)
+
+        assertEquals(ServiceRobotWsProbeState.EXECUTED, verified.state)
+        assertEquals(true, verified.ok)
+        assertEquals(true, verified.canPublishPresence)
+    }
+
+    @Test
     fun `executed failures increase service probe pause and success resets it`() {
         val tracker = ServiceRobotWsProbeTracker(cacheTtlMs = 10_000L, baseMinIntervalMs = 10_000L)
 
