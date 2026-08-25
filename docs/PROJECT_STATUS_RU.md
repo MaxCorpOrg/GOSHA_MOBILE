@@ -1,5 +1,16 @@
 # PROJECT STATUS
 
+## Контрольная точка 2026-08-25
+
+- Временный голосовой маршрут подтверждён как рабочий: `gosha-main/voice` принят через `TEMP_NL_RELAY -> PRIMARY_PLATFORM_SERVER`; робот разговаривает, подключён и общается.
+- Это временный канал до переезда на `FUTURE_PRODUCTION_SERVER` в конце месяца. `TEMP_NL_RELAY` не является production-константой и не должен хардкодиться в Android, прошивке, панели, OTA или документации.
+- Текущие роли портов: `18876` — HTTP-контур панели, mobile API и OTA/config handoff; `18080` — voice `WebSocket` и `MCP`.
+- Адреса должны приходить из runtime/env платформы, пакета подключения и сохранённых мобильных значений `panel_url` / `cloud_endpoint` / `edge_hub_url`; реальные публичные IP, токены, onboarding-коды, Wi‑Fi-пароли, файлы подписи и runtime/env-секреты в Git не добавлять.
+- `http://192.168.4.1` остаётся только локальным AP-порталом onboarding робота, а не адресом панели, relay, OTA или voice/MCP.
+- Android-кандидат `feature/mobile-triangle-runtime` остаётся `NO-GO`: fail-closed identity требуется довести для preferred/saved/panel-hint host и `ConnectorForegroundService`.
+- Перед установкой APK нужны тесты на reject чужого `device_id` для preferred/saved/panel-hint, запрет публикации `home_wifi_local` из foreground service при identity mismatch, безопасную смену `expected_device_id` и миграцию relay/new-server URL без хардкода временного relay.
+- Телефон, APK-кандидат, сохранённые данные приложения и live robot не трогать без явного одобрения оператора.
+
 ## Контрольная точка нового робота 2026-08-24
 
 - Домашний Wi-Fi через точку настройки робота передан успешно: точка настройки закрылась, телефон вернулся в домашнюю сеть. Последующая ошибка относится к маршруту от робота до публичного узла платформы, а не к паролю Wi-Fi.

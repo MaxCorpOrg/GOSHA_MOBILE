@@ -1,5 +1,18 @@
 # START HERE
 
+## Свежая точка 2026-08-25
+
+- Живой голосовой канал `gosha-main` принят через временный маршрут `TEMP_NL_RELAY -> PRIMARY_PLATFORM_SERVER`: робот разговаривает, подключён и общается. Это фиксируется только как временный инфраструктурный канал, не как новая постоянная архитектура.
+- Роли портов на время этого обхода:
+  - `18876` — HTTP-контур панели, mobile API и OTA/config handoff;
+  - `18080` — голосовой `WebSocket` и `MCP`-маршрут.
+- `TEMP_NL_RELAY` нельзя хардкодить в Android-коде, прошивке, панели или документации как production-адрес. До переезда на `FUTURE_PRODUCTION_SERVER` в конце месяца адрес должен приходить только из runtime/env платформы, пакета подключения и сохранённых мобильных значений `panel_url` / `cloud_endpoint` / `edge_hub_url`.
+- Реальные публичные IP, токены, onboarding-коды, Wi‑Fi-пароли, файлы подписи и runtime/env-секреты не добавлять в Git. В переносимых документах использовать символические имена `TEMP_NL_RELAY`, `PRIMARY_PLATFORM_SERVER`, `FUTURE_PRODUCTION_SERVER`.
+- `http://192.168.4.1` остаётся только локальным AP-порталом onboarding робота; это не адрес панели, relay, OTA-платформы или voice/MCP-контура.
+- Android-кандидат `feature/mobile-triangle-runtime` остаётся `NO-GO` для установки/merge: общий subnet sweep уже fail-closed по ожидаемому `device_id`, но preferred/saved/panel-hint host и `ConnectorForegroundService` ещё могут подтвердить/опубликовать локальный host по одному открытому `WebSocket` без обязательного `gosha.identity.get`.
+- Перед работой с APK/телефоном нужны минимальные кодовые тесты: чужой `device_id` на preferred/saved/panel-hint host отклоняется; foreground service не публикует `home_wifi_local` при identity mismatch; смена `expected_device_id` не переиспользует старый host; миграция relay/new-server URL сохраняет токены и идентификаторы и не хардкодит relay.
+- APK-кандидат, телефон, сохранённые данные приложения и live robot не трогать без явного одобрения оператора.
+
 Если новый агент входит в `GOSHA_MOBILE`, начинай отсюда.
 
 ## Сначала прочитать

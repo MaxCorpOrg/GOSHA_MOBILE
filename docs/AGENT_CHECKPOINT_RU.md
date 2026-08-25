@@ -1,5 +1,20 @@
 # AGENT CHECKPOINT
 
+## Свежая контрольная точка 2026-08-25
+
+- Текущий live-канал `gosha-main/voice` принят: робот разговаривает, подключён и общается через временную связку `TEMP_NL_RELAY -> PRIMARY_PLATFORM_SERVER`.
+- Временный relay сохраняется только до переноса на нормальный `FUTURE_PRODUCTION_SERVER` в конце месяца. Его нельзя закреплять в коде, прошивке, панели или переносимой документации как production-адрес.
+- Портовые роли текущего серверного контура:
+  - `18876` — HTTP: панель, mobile API, OTA/config handoff;
+  - `18080` — voice `WebSocket` и `MCP`.
+- Источник адресов для Android и связанных компонентов: runtime/env платформы, пакет подключения и сохранённые мобильные значения `panel_url` / `cloud_endpoint` / `edge_hub_url`. При миграции временного relay на новый сервер нужно сохранить эти runtime/saved значения и не прошивать конкретный relay.
+- Реальные публичные IP, токены, onboarding-коды, Wi‑Fi-пароли, файлы подписи и runtime/env-секреты не писать в Git; использовать только символические имена `TEMP_NL_RELAY`, `PRIMARY_PLATFORM_SERVER`, `FUTURE_PRODUCTION_SERVER`.
+- `http://192.168.4.1` — только локальный AP-портал onboarding робота. Не использовать его как platform/panel/relay/OTA/voice endpoint.
+- Текущий Android quality gate для `feature/mobile-triangle-runtime`: `NO-GO` для установки и merge. Причина: fail-closed identity закрыт для общего subnet sweep, но ещё не закрыт для preferred/saved/panel-hint host и foreground service.
+- Минимальные исправления перед новым APK: expected `device_id` обязателен для preferred/saved/panel-hint путей; `ConnectorForegroundService` должен подтверждать локальный host через identity-aware read-only probe, а не только через открытый `WebSocket`; смена expected `device_id` не должна переиспользовать старый сохранённый host.
+- Нужные тесты: mismatch `device_id` на preferred/saved/panel-hint отклоняется; foreground service не публикует `home_wifi_local` при identity mismatch; миграция relay/new-server URL сохраняет токены/device identifiers и не хардкодит `TEMP_NL_RELAY`.
+- APK-кандидат, телефон, сохранённые данные приложения и live robot не трогать без явного одобрения оператора.
+
 ## Свежая контрольная точка 2026-08-24
 
 - Подключение нового робота к домашнему Wi-Fi через его точку настройки завершилось, но робот получает сетевую ошибку маршрута до публичного узла платформы.
