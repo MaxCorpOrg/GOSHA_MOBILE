@@ -6,6 +6,7 @@
 - Независимый AI Office reviewer на GPT-5.5/xhigh проверил предыдущий Android-кандидат `62a11aa` и нашёл два P1: stale foreground service мог опубликовать host прежнего физического робота, а post-portal discovery мог вернуть сохранённый неавторитетный `expected_device_id`.
 - Оба P1 исправлены fail-closed: foreground service сверяет текущие `robot_id`, `expected_device_id` и `robot_host` перед probe, presence и командами и останавливает устаревший запуск; неавторитетный сохранённый device id больше не используется без bundle/panel/local verification.
 - Дополнительно устранена потеря WebSocket notification: операция считается доставленной только после нормального close-handshake, а не сразу после постановки кадра в очередь.
+- Первый re-review выявил поздний `stopSelf()` старой coroutine между сохранением нового draft и обработкой нового `ACTION_START`. Остановка теперь привязана к Android `startId`: `stopSelfResult(oldStartId)` не может остановить более новый start request.
 - `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `git diff --check` проходят. Следующий шаг — новый неизменяемый AI Office review этого исправленного HEAD.
 - APK, телефон, сохранённые настройки приложения и физический робот в этой работе не изменялись. До PASS повторного review установка и live-приёмка запрещены.
 

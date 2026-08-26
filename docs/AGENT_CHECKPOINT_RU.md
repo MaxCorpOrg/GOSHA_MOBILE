@@ -7,6 +7,7 @@
 - Исправлено: foreground service перед локальным probe, публикацией presence и обработкой Hub-команд требует совпадения текущих `robot_id`, `expected_device_id` и `robot_host`; устаревший запуск останавливается, а superseded coroutine не может отменить новый connector job.
 - Исправлено: если saved device id неавторитетен, discovery не возвращает его как последний fallback; без bundle, panel hint или локально проверенного device id поток остаётся fail-closed.
 - При проверке найден и устранён отдельный дефект доставки notification: `RobotJsonRpcProxy.notify()` ждёт нормального WebSocket close-handshake перед успехом.
+- Re-review первого исправления нашёл окно между новым persisted draft и новым `ACTION_START`, где поздний `stopSelf()` мог остановить новый service. Текущая остановка привязана к `startId` и идёт через `stopSelfResult(oldStartId)`; superseded coroutine не отменяет более новый start request.
 - Полный `testClientDebugUnitTest + assembleClientDebug + lintClientDebug` и `git diff --check` проходят. Нужен новый immutable AI Office review исправленного HEAD.
 - APK, телефон, prefs и live robot не изменялись; flash, motion и trim по-прежнему запрещены из-за левой сервы.
 
