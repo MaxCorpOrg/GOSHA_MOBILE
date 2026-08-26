@@ -1,5 +1,14 @@
 # START HERE
 
+## Свежая точка 2026-08-26
+
+- Platform quality gate уже закрыт; активный обязательный этап — Android Draft PR `#51` в ветке `feature/mobile-triangle-runtime`.
+- Независимый AI Office reviewer на GPT-5.5/xhigh проверил предыдущий Android-кандидат `62a11aa` и нашёл два P1: stale foreground service мог опубликовать host прежнего физического робота, а post-portal discovery мог вернуть сохранённый неавторитетный `expected_device_id`.
+- Оба P1 исправлены fail-closed: foreground service сверяет текущие `robot_id`, `expected_device_id` и `robot_host` перед probe, presence и командами и останавливает устаревший запуск; неавторитетный сохранённый device id больше не используется без bundle/panel/local verification.
+- Дополнительно устранена потеря WebSocket notification: операция считается доставленной только после нормального close-handshake, а не сразу после постановки кадра в очередь.
+- `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `git diff --check` проходят. Следующий шаг — новый неизменяемый AI Office review этого исправленного HEAD.
+- APK, телефон, сохранённые настройки приложения и физический робот в этой работе не изменялись. До PASS повторного review установка и live-приёмка запрещены.
+
 ## Свежая точка 2026-08-25
 
 - Живой голосовой канал `gosha-main` принят через временный маршрут `TEMP_NL_RELAY -> PRIMARY_PLATFORM_SERVER`: робот разговаривает, подключён и общается. Это фиксируется только как временный инфраструктурный канал, не как новая постоянная архитектура.

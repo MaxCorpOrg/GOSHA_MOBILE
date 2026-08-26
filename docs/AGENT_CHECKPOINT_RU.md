@@ -1,5 +1,15 @@
 # AGENT CHECKPOINT
 
+## Свежая контрольная точка 2026-08-26
+
+- Platform quality gate закрыт; продолжение идёт строго через Android Draft PR `#51`, без перехода к firmware раньше Android PASS.
+- AI Office reviewer GPT-5.5/xhigh проверил неизменяемый Android-коммит `62a11aa` и оставил два P1 без P0: stale foreground presence после замены физического устройства при том же `robot_id` и использование неавторитетного сохранённого `expected_device_id` в post-portal generic discovery.
+- Исправлено: foreground service перед локальным probe, публикацией presence и обработкой Hub-команд требует совпадения текущих `robot_id`, `expected_device_id` и `robot_host`; устаревший запуск останавливается, а superseded coroutine не может отменить новый connector job.
+- Исправлено: если saved device id неавторитетен, discovery не возвращает его как последний fallback; без bundle, panel hint или локально проверенного device id поток остаётся fail-closed.
+- При проверке найден и устранён отдельный дефект доставки notification: `RobotJsonRpcProxy.notify()` ждёт нормального WebSocket close-handshake перед успехом.
+- Полный `testClientDebugUnitTest + assembleClientDebug + lintClientDebug` и `git diff --check` проходят. Нужен новый immutable AI Office review исправленного HEAD.
+- APK, телефон, prefs и live robot не изменялись; flash, motion и trim по-прежнему запрещены из-за левой сервы.
+
 ## Свежая контрольная точка 2026-08-25
 
 - Текущий live-канал `gosha-main/voice` принят: робот разговаривает, подключён и общается через временную связку `TEMP_NL_RELAY -> PRIMARY_PLATFORM_SERVER`.

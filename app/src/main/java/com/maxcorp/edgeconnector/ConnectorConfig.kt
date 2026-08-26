@@ -181,9 +181,7 @@ internal fun resolveDiscoveryExpectedDeviceIdentity(
 
     return DeviceIdentityExpectation(
         deviceId = authoritativeDeviceId.ifBlank {
-            panelDeviceId.ifBlank {
-                savedDeviceId
-            }
+            panelDeviceId
         }
     )
 }
@@ -221,11 +219,28 @@ internal fun resolveSavedExpectedDeviceIdentity(
 
     return DeviceIdentityExpectation(
         deviceId = verifiedDeviceId.ifBlank {
-            authoritativeDeviceId.ifBlank {
-                savedDeviceId
-            }
+            authoritativeDeviceId
         }
     )
+}
+
+internal fun connectorIdentityMatchesDraft(
+    config: ConnectorConfig,
+    draft: OnboardingDraft,
+): Boolean {
+    val configRobotId = config.robotId.trim()
+    val draftRobotId = draft.robotId.trim()
+    val configDeviceId = normalizedDeviceId(config.expectedDeviceId)
+    val draftDeviceId = normalizedDeviceId(draft.expectedDeviceId)
+    val configHost = sanitizeRobotHost(config.robotHost).trim().lowercase()
+    val draftHost = sanitizeRobotHost(draft.robotHost).trim().lowercase()
+
+    return configRobotId.isNotBlank() &&
+        configRobotId == draftRobotId &&
+        configDeviceId.isNotBlank() &&
+        configDeviceId == draftDeviceId &&
+        configHost.isNotBlank() &&
+        configHost == draftHost
 }
 
 internal fun resolveSavedExpectedDeviceId(

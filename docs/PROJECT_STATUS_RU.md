@@ -1,5 +1,15 @@
 # PROJECT STATUS
 
+## Контрольная точка 2026-08-26: исправление Android P1
+
+- После Platform PASS активирован Android gate Draft PR `#51`.
+- Независимый read-only review предыдущего HEAD `62a11aa` не нашёл P0, но подтвердил два P1: старый `ConnectorForegroundService` мог опубликовать прежний local host после замены физического устройства, а post-portal поиск мог использовать stale saved `expected_device_id`, несмотря на неавторитетный режим.
+- Foreground service теперь сверяет persisted draft с собственными `robot_id`, `expected_device_id` и `robot_host` перед probe, presence и функциональными командами. При mismatch текущий stale job отменяется и service останавливается; superseded job только завершает свою coroutine и не останавливает новую конфигурацию.
+- Разрешение ожидаемой личности больше не возвращает saved device id, если `savedDeviceIdIsAuthoritative=false`; без нового bundle/panel/local verification generic discovery не стартует.
+- `RobotJsonRpcProxy.notify()` завершает успех только после нормального WebSocket close-handshake. Это закрывает гонку, при которой queued frame мог быть отменён в `finally` до доставки.
+- Добавлены отрицательные unit-тесты на отсутствие fallback к старому device id и на несовпадение текущих robot/device/host данных connector service.
+- Локально проходят `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `git diff --check`. Следующий шаг — повторный immutable review на GPT-5.5/xhigh; до его PASS ветка остаётся `NO-GO` для merge и установки.
+
 ## Контрольная точка 2026-08-25
 
 - Временный голосовой маршрут подтверждён как рабочий: `gosha-main/voice` принят через `TEMP_NL_RELAY -> PRIMARY_PLATFORM_SERVER`; робот разговаривает, подключён и общается.

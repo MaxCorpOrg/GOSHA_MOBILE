@@ -47,6 +47,8 @@ class ConnectorForegroundService : Service() {
     private lateinit var runtimeEventReporter: RuntimeEventReporter
 
     private var connectorJob = SupervisorJob()
+    private val connectorStateLock = Any()
+    @Volatile private var activeConnectorConfig: ConnectorConfig? = null
     private val robotWsProbeTracker = ServiceRobotWsProbeTracker()
     @Volatile private var lastConnectorState: String = "idle"
     @Volatile private var lastRuntimeProbeSignature: String = ""
@@ -97,13 +99,18 @@ class ConnectorForegroundService : Service() {
     }
 
     private fun startOrRestart(config: ConnectorConfig) {
-        connectorJob.cancel()
-        connectorJob = SupervisorJob()
-        serviceScope.launch(connectorJob) {
+        val nextJob = SupervisorJob()
+        synchronized(connectorStateLock) {
+            activeConnectorConfig = null
+            connectorJob.cancel()
+            connectorJob = nextJob
+            activeConnectorConfig = config
+        }
+        serviceScope.launch(nextJob) {
             runPanelPresenceLoop(config)
         }
         if (config.canRunEdgeHub()) {
-            serviceScope.launch(connectorJob) {
+            serviceScope.launch(nextJob) {
                 runConnectorLoop(config)
             }
         } else {
@@ -128,6 +135,7 @@ class ConnectorForegroundService : Service() {
         publishStatus("Robot WS: ${config.robotWsUrl()}")
 
         while (serviceScope.isActive && connectorJob.isActive) {
+            if (!ensureCurrentConnectorIdentity(config)) break
             try {
                 publishStatus("Подключение к Hub...")
                 val hub = HubSocket.connect(
@@ -150,6 +158,7 @@ class ConnectorForegroundService : Service() {
                     }
 
                     for (raw in hub.incoming) {
+                        if (!ensureCurrentConnectorIdentity(config)) break
                         handleHubMessage(raw, hub, config)
                     }
 
@@ -175,6 +184,7 @@ class ConnectorForegroundService : Service() {
 
     private suspend fun runPanelPresenceLoop(config: ConnectorConfig) {
         while (serviceScope.isActive && connectorJob.isActive) {
+            if (!ensureCurrentConnectorIdentity(config)) break
             try {
                 refreshPanelPresence(config)
             } catch (exc: Exception) {
@@ -185,6 +195,7 @@ class ConnectorForegroundService : Service() {
     }
 
     private suspend fun handleHubMessage(raw: String, hub: HubSocket, config: ConnectorConfig) {
+        if (!ensureCurrentConnectorIdentity(config)) return
         val msg = try {
             JSONObject(raw)
         } catch (_: Exception) {
@@ -249,6 +260,7 @@ class ConnectorForegroundService : Service() {
     }
 
     private suspend fun publishAgentStatus(hub: HubSocket, config: ConnectorConfig) {
+        if (!ensureCurrentConnectorIdentity(config)) return
         val probe = probeRobotWs(config)
         runCatching {
             refreshPanelPresence(config, probe)
@@ -352,6 +364,7 @@ class ConnectorForegroundService : Service() {
         config: ConnectorConfig,
         probeResult: ServiceRobotWsProbeResult? = null,
     ) {
+        if (!ensureCurrentConnectorIdentity(config)) return
         val probe = probeResult ?: run {
             probeRobotWs(config)
         }
@@ -364,7 +377,7 @@ class ConnectorForegroundService : Service() {
         }
 
         val draft = configStore.loadDraft()
-        if (draft.robotId != config.robotId) {
+        if (!ensureCurrentConnectorIdentity(config, draft)) {
             return
         }
 
@@ -427,6 +440,33 @@ class ConnectorForegroundService : Service() {
         }
     }
 
+    private fun ensureCurrentConnectorIdentity(
+        config: ConnectorConfig,
+        draft: OnboardingDraft = configStore.loadDraft(),
+    ): Boolean {
+        var shouldStop = false
+        val matches = synchronized(connectorStateLock) {
+            if (activeConnectorConfig !== config) {
+                false
+            } else if (connectorIdentityMatchesDraft(config, draft)) {
+                true
+            } else {
+                activeConnectorConfig = null
+                connectorJob.cancel()
+                shouldStop = true
+                false
+            }
+        }
+        if (shouldStop) {
+            Log.w(
+                logTag,
+                "Stopping stale connector because the persisted robot identity or host changed",
+            )
+            stopSelf()
+        }
+        return matches
+    }
+
     private fun setRobotWsState(ok: Boolean, error: String) {
         robotWsProbeTracker.recordExternalObservation(ok, error, System.currentTimeMillis())
     }
@@ -483,7 +523,10 @@ class ConnectorForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        connectorJob.cancel()
+        synchronized(connectorStateLock) {
+            activeConnectorConfig = null
+            connectorJob.cancel()
+        }
         serviceScope.cancel()
         publishStatus("Сервис остановлен")
         super.onDestroy()

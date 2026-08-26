@@ -111,6 +111,27 @@ class ConnectorConfigTest {
     }
 
     @Test
+    fun `non authoritative saved device id cannot enable post portal discovery`() {
+        val draft = OnboardingDraft(
+            robotId = "gosha-main",
+            expectedDeviceId = "old-device",
+            robotHost = "192.168.1.20",
+        )
+
+        val resolved = resolveDiscoveryExpectedDeviceIdentity(
+            panelSnapshot = null,
+            draft = draft,
+            bundleDeviceId = "",
+            savedDeviceIdIsAuthoritative = false,
+            panelDeviceIdHint = "",
+        )
+
+        assertFalse(resolved.hasConflict)
+        assertFalse(resolved.canVerify)
+        assertEquals("", resolved.deviceId)
+    }
+
+    @Test
     fun `panel runtime device id conflicts with authoritative bundle or current claim id`() {
         val draft = OnboardingDraft(
             robotId = "gosha-main",
@@ -178,6 +199,69 @@ class ConnectorConfigTest {
                 bundleDeviceId = "",
                 verifiedLocalDeviceId = "new-device",
             ).deviceId,
+        )
+    }
+
+    @Test
+    fun `non authoritative saved device id is not restored without local verification`() {
+        val stale = OnboardingDraft(
+            robotId = "gosha-main",
+            expectedDeviceId = "old-device",
+        )
+
+        val resolved = resolveSavedExpectedDeviceIdentity(
+            current = stale,
+            bundleDeviceId = "",
+            verifiedLocalDeviceId = "",
+            savedDeviceIdIsAuthoritative = false,
+        )
+
+        assertFalse(resolved.hasConflict)
+        assertFalse(resolved.canVerify)
+        assertEquals("", resolved.deviceId)
+    }
+
+    @Test
+    fun `connector identity requires current robot device and host`() {
+        val config = ConnectorConfig(
+            hubBaseUrl = "wss://hub.example.test/mcp/",
+            robotId = "gosha-main",
+            expectedDeviceId = "AA:BB:CC:DD:EE:FF",
+            token = "token",
+            robotHost = "Robot.Local",
+            robotPort = 8080,
+            robotPath = "/ws",
+        )
+        val current = OnboardingDraft(
+            robotId = "gosha-main",
+            expectedDeviceId = "aa:bb:cc:dd:ee:ff",
+            robotHost = "robot.local",
+        )
+
+        assertTrue(connectorIdentityMatchesDraft(config, current))
+        assertFalse(
+            connectorIdentityMatchesDraft(
+                config,
+                current.copy(expectedDeviceId = "11:22:33:44:55:66"),
+            )
+        )
+        assertFalse(
+            connectorIdentityMatchesDraft(
+                config,
+                current.copy(robotHost = "192.168.1.21"),
+            )
+        )
+        assertFalse(
+            connectorIdentityMatchesDraft(
+                config,
+                current.copy(robotId = "gosha-other"),
+            )
+        )
+        assertFalse(
+            connectorIdentityMatchesDraft(
+                config.copy(expectedDeviceId = ""),
+                current.copy(expectedDeviceId = ""),
+            )
         )
     }
 

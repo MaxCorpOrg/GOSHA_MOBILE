@@ -166,8 +166,9 @@ object RobotJsonRpcProxy {
                         if (!done.isCompleted) done.completeExceptionally(IOException("failed to send notify"))
                         return
                     }
-                    if (!done.isCompleted) done.complete(Unit)
-                    webSocket.close(1000, "notify-sent")
+                    if (!webSocket.close(1000, "notify-sent") && !done.isCompleted) {
+                        done.completeExceptionally(IOException("failed to close notify websocket"))
+                    }
                 }
             }
 
@@ -176,7 +177,9 @@ object RobotJsonRpcProxy {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                if (!done.isCompleted) {
+                if (identityVerified && code == 1000) {
+                    if (!done.isCompleted) done.complete(Unit)
+                } else if (!done.isCompleted) {
                     done.completeExceptionally(IOException("robot websocket closed: $code/$reason"))
                 }
             }

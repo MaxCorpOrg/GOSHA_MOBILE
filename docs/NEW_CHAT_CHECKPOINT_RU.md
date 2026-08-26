@@ -1,5 +1,13 @@
 # NEW CHAT CHECKPOINT
 
+## Самая свежая точка 2026-08-26
+
+- Активная ветка — `feature/mobile-triangle-runtime`, активный gate — Android Draft PR `#51`; Platform gate уже пройден.
+- Review коммита `62a11aa` дал `NO-GO` с двумя P1: stale публикация `home_wifi_local` старой foreground-службой после смены физического устройства и fallback к старому сохранённому `expected_device_id` в post-portal discovery.
+- Исправление требует полного совпадения текущих `robot_id`, `expected_device_id` и `robot_host` для foreground service и исключает сохранённый device id из fallback, когда он объявлен неавторитетным.
+- WebSocket notification теперь ждёт нормальный close-handshake, поэтому `finally` больше не может отменить сокет до фактической отправки функционального кадра.
+- Полный локальный Android-шлюз проходит. Кандидат ещё должен получить повторный независимый AI Office PASS; APK и live state не трогать до этого результата.
+
 ## Самая свежая точка 2026-08-24
 
 - Новый робот успешно вышел из режима точки настройки в домашний Wi-Fi, но не имеет маршрута до публичного узла платформы; это не ошибка пароля Wi-Fi.
