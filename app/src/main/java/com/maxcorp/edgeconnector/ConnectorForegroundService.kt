@@ -166,7 +166,7 @@ class ConnectorForegroundService : Service() {
 
                     for (raw in hub.incoming) {
                         if (!ensureCurrentConnectorIdentity(config, startId)) break
-                        handleHubMessage(raw, hub, config, startId)
+                        handleHubMessage(raw, hub, config, startId, runJob)
                     }
 
                     val reason = hub.awaitClosed()
@@ -210,8 +210,9 @@ class ConnectorForegroundService : Service() {
         hub: HubSocket,
         config: ConnectorConfig,
         startId: Int,
+        runJob: kotlinx.coroutines.Job,
     ) {
-        if (!ensureCurrentConnectorIdentity(config, startId)) return
+        if (!isCurrentConnectorRun(config, startId, runJob)) return
         val msg = try {
             JSONObject(raw)
         } catch (_: Exception) {
@@ -235,15 +236,19 @@ class ConnectorForegroundService : Service() {
 
             "mcp_notify" -> {
                 val payload = msg.optJSONObject("payload") ?: return
+                val isCurrentRun = { isCurrentConnectorRun(config, startId, runJob) }
                 try {
                     RobotJsonRpcProxy.notify(
                         http = localRobotHttpClient(),
                         robotWsUrl = config.robotWsUrl(),
                         payload = payload,
                         expectedDeviceId = config.expectedDeviceId,
+                        isCurrentRun = isCurrentRun,
                     )
+                    if (!isCurrentRun()) return
                     setRobotWsState(true, "")
                 } catch (exc: Exception) {
+                    if (!isCurrentRun()) return
                     publishStatus("notify->robot failed: ${exc.message}")
                     setRobotWsState(false, exc.message ?: "notify failed")
                 }
@@ -253,17 +258,24 @@ class ConnectorForegroundService : Service() {
             "mcp_request" -> {
                 val bridgeId = msg.optString("bridge_id")
                 val payload = msg.optJSONObject("payload") ?: return
+                val isCurrentRun = { isCurrentConnectorRun(config, startId, runJob) }
                 val responsePayload = try {
-                    RobotJsonRpcProxy.call(
+                    val response = RobotJsonRpcProxy.call(
                         http = localRobotHttpClient(),
                         robotWsUrl = config.robotWsUrl(),
                         payload = payload,
                         expectedDeviceId = config.expectedDeviceId,
-                    ).also { setRobotWsState(true, "") }
+                        isCurrentRun = isCurrentRun,
+                    )
+                    if (!isCurrentRun()) return
+                    setRobotWsState(true, "")
+                    response
                 } catch (exc: Exception) {
+                    if (!isCurrentRun()) return
                     setRobotWsState(false, exc.message ?: "request failed")
                     jsonRpcError(payload.opt("id"), "mobile connector error: ${exc.message}")
                 }
+                if (!isCurrentRun()) return
                 val envelope = JSONObject()
                     .put("type", "mcp_response")
                     .put("bridge_id", bridgeId)
@@ -490,6 +502,14 @@ class ConnectorForegroundService : Service() {
             )
         }
         return matches
+    }
+
+    private fun isCurrentConnectorRun(
+        config: ConnectorConfig,
+        startId: Int,
+        runJob: kotlinx.coroutines.Job,
+    ): Boolean {
+        return runJob.isActive && ensureCurrentConnectorIdentity(config, startId)
     }
 
     private fun setRobotWsState(ok: Boolean, error: String) {

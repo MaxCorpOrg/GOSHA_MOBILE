@@ -7,7 +7,10 @@
 - Оба P1 исправлены fail-closed: foreground service сверяет текущие `robot_id`, `expected_device_id` и `robot_host` перед probe, presence и командами и останавливает устаревший запуск; неавторитетный сохранённый device id больше не используется без bundle/panel/local verification.
 - Дополнительно устранена потеря WebSocket notification: операция считается доставленной только после нормального close-handshake, а не сразу после постановки кадра в очередь.
 - Первый re-review выявил поздний `stopSelf()` старой coroutine между сохранением нового draft и обработкой нового `ACTION_START`. Остановка теперь привязана к Android `startId`: `stopSelfResult(oldStartId)` не может остановить более новый start request.
-- `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `git diff --check` проходят. Следующий шаг — новый неизменяемый AI Office review этого исправленного HEAD.
+- Финальный review `task-20260826T103629Z-android-startid-fence-gate-at-221f6d8` подтвердил startId-fence, но нашёл новый P1: старый запуск мог открыть WebSocket, дождаться задержанного `gosha.identity.result` и отправить функциональный payload уже после замены `robot_host` / `expected_device_id`.
+- Текущий фикс добавляет fail-closed callback актуальности `config + startId + captured Job` в `RobotJsonRpcProxy.call/notify`; callback проверяется перед identity probe и непосредственно перед отправкой payload. `ConnectorForegroundService` также проверяет актуальность перед отправкой `mcp_response` в Hub.
+- Добавлены регрессии с задержанным identity-result и superseded run для `notify` и `call`: после смены запуска в сокет уходит только `gosha.identity.get`, функциональный payload не отправляется.
+- `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `git diff --check` проходят. Следующий шаг — коммит, push и новый неизменяемый AI Office review исправленного HEAD.
 - APK, телефон, сохранённые настройки приложения и физический робот в этой работе не изменялись. До PASS повторного review установка и live-приёмка запрещены.
 
 ## Свежая точка 2026-08-25

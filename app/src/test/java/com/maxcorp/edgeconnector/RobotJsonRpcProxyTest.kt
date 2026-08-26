@@ -2,7 +2,9 @@ package com.maxcorp.gosha.mobile
 
 import java.io.IOException
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -18,6 +20,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
@@ -141,6 +144,89 @@ class RobotJsonRpcProxyTest {
     }
 
     @Test
+    fun `notify refuses superseded run after delayed identity before payload`() = runBlocking {
+        val identityProbeSeen = CountDownLatch(1)
+        val releaseIdentity = CountDownLatch(1)
+        val currentRun = AtomicBoolean(true)
+        val robot = websocketServer(
+            beforeIdentityResult = {
+                identityProbeSeen.countDown()
+                assertTrue(releaseIdentity.await(2, TimeUnit.SECONDS))
+            },
+        )
+        try {
+            val notify = async(Dispatchers.IO) {
+                expectIoFailure {
+                    RobotJsonRpcProxy.notify(
+                        http = OkHttpClient(),
+                        robotWsUrl = wsUrl(robot.server),
+                        payload = JSONObject().put("method", "self.test"),
+                        expectedDeviceId = "aa:bb:cc:dd:ee:ff",
+                        timeoutMs = 2_000L,
+                        isCurrentRun = { currentRun.get() },
+                    )
+                }
+            }
+
+            assertTrue(identityProbeSeen.await(2, TimeUnit.SECONDS))
+            currentRun.set(false)
+            releaseIdentity.countDown()
+
+            assertEquals("connector run superseded", notify.await().message)
+            val messages = waitForMessages(robot.messages, 1)
+            assertEquals(1, messages.size)
+            assertEquals("gosha.identity.get", JSONObject(messages.single()).getString("type"))
+            delay(200L)
+            assertEquals(1, robot.messages.size)
+        } finally {
+            robot.server.shutdown()
+        }
+    }
+
+    @Test
+    fun `call refuses superseded run after delayed identity before request payload`() = runBlocking {
+        val identityProbeSeen = CountDownLatch(1)
+        val releaseIdentity = CountDownLatch(1)
+        val currentRun = AtomicBoolean(true)
+        val robot = websocketServer(
+            respondToCommand = true,
+            beforeIdentityResult = {
+                identityProbeSeen.countDown()
+                assertTrue(releaseIdentity.await(2, TimeUnit.SECONDS))
+            },
+        )
+        try {
+            val call = async(Dispatchers.IO) {
+                expectIoFailure {
+                    RobotJsonRpcProxy.call(
+                        http = OkHttpClient(),
+                        robotWsUrl = wsUrl(robot.server),
+                        payload = JSONObject()
+                            .put("id", "request-1")
+                            .put("method", "self.test"),
+                        expectedDeviceId = "aa:bb:cc:dd:ee:ff",
+                        timeoutMs = 2_000L,
+                        isCurrentRun = { currentRun.get() },
+                    )
+                }
+            }
+
+            assertTrue(identityProbeSeen.await(2, TimeUnit.SECONDS))
+            currentRun.set(false)
+            releaseIdentity.countDown()
+
+            assertEquals("connector run superseded", call.await().message)
+            val messages = waitForMessages(robot.messages, 1)
+            assertEquals(1, messages.size)
+            assertEquals("gosha.identity.get", JSONObject(messages.single()).getString("type"))
+            delay(200L)
+            assertEquals(1, robot.messages.size)
+        } finally {
+            robot.server.shutdown()
+        }
+    }
+
+    @Test
     fun `notify rejects missing expected device id before opening websocket`() = runBlocking {
         val robot = websocketServer()
         try {
@@ -217,6 +303,7 @@ class RobotJsonRpcProxyTest {
     private fun websocketServer(
         identityDeviceId: String = "aa:bb:cc:dd:ee:ff",
         respondToCommand: Boolean = false,
+        beforeIdentityResult: () -> Unit = {},
     ): TestRobotWsServer {
         val messages = Collections.synchronizedList(mutableListOf<String>())
         val server = MockWebServer()
@@ -226,6 +313,7 @@ class RobotJsonRpcProxyTest {
                     messages.add(text)
                     val obj = runCatching { JSONObject(text) }.getOrNull() ?: return
                     if (obj.optString("type") == "gosha.identity.get") {
+                        beforeIdentityResult()
                         webSocket.send(identityResult(identityDeviceId).toString())
                         return
                     }

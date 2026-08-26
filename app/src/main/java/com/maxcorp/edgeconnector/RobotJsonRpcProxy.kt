@@ -21,13 +21,14 @@ object RobotJsonRpcProxy {
         payload: JSONObject,
         expectedDeviceId: String = "",
         timeoutMs: Long = 8_000,
+        isCurrentRun: () -> Boolean = { true },
     ): JSONObject {
         val normalizedExpectedDeviceId = requireExpectedDeviceId(expectedDeviceId)
         return when (
             val run = LocalRobotProbeCoordinator.runFunctionalCommand(
                 source = "RobotJsonRpcProxy.call",
             ) {
-                callDirect(http, robotWsUrl, payload, normalizedExpectedDeviceId, timeoutMs)
+                callDirect(http, robotWsUrl, payload, normalizedExpectedDeviceId, timeoutMs, isCurrentRun)
             }
         ) {
             is LocalRobotProbeRun.Executed -> run.value
@@ -41,7 +42,9 @@ object RobotJsonRpcProxy {
         payload: JSONObject,
         expectedDeviceId: String,
         timeoutMs: Long,
+        isCurrentRun: () -> Boolean,
     ): JSONObject {
+        requireCurrentRun(isCurrentRun)
         val reqId = normalizeId(payload.opt("id"))
             ?: throw IOException("jsonrpc payload missing id")
 
@@ -52,6 +55,7 @@ object RobotJsonRpcProxy {
 
         val ws = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (!completeIfStale(result, webSocket, isCurrentRun)) return
                 if (!webSocket.send(identityRequest.toString()) && !result.isCompleted) {
                     result.completeExceptionally(IOException("failed to send identity probe to robot"))
                 }
@@ -73,6 +77,7 @@ object RobotJsonRpcProxy {
                         return
                     }
                     identityVerified = true
+                    if (!completeIfStale(result, webSocket, isCurrentRun)) return
                     if (!webSocket.send(payload.toString()) && !result.isCompleted) {
                         result.completeExceptionally(IOException("failed to send payload to robot"))
                     }
@@ -113,13 +118,14 @@ object RobotJsonRpcProxy {
         payload: JSONObject,
         expectedDeviceId: String = "",
         timeoutMs: Long = 4_000,
+        isCurrentRun: () -> Boolean = { true },
     ) {
         val normalizedExpectedDeviceId = requireExpectedDeviceId(expectedDeviceId)
         when (
             val run = LocalRobotProbeCoordinator.runFunctionalCommand(
                 source = "RobotJsonRpcProxy.notify",
             ) {
-                notifyDirect(http, robotWsUrl, payload, normalizedExpectedDeviceId, timeoutMs)
+                notifyDirect(http, robotWsUrl, payload, normalizedExpectedDeviceId, timeoutMs, isCurrentRun)
             }
         ) {
             is LocalRobotProbeRun.Executed -> return
@@ -133,13 +139,16 @@ object RobotJsonRpcProxy {
         payload: JSONObject,
         expectedDeviceId: String,
         timeoutMs: Long,
+        isCurrentRun: () -> Boolean,
     ) {
+        requireCurrentRun(isCurrentRun)
         val done = CompletableDeferred<Unit>()
         val request = Request.Builder().url(robotWsUrl).build()
         val identityRequest = identityRequestPayload()
         var identityVerified = false
         val ws = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (!completeIfStale(done, webSocket, isCurrentRun)) return
                 if (!webSocket.send(identityRequest.toString()) && !done.isCompleted) {
                     done.completeExceptionally(IOException("failed to send identity probe to robot"))
                 }
@@ -161,6 +170,7 @@ object RobotJsonRpcProxy {
                         return
                     }
                     identityVerified = true
+                    if (!completeIfStale(done, webSocket, isCurrentRun)) return
                     val sent = webSocket.send(payload.toString())
                     if (!sent) {
                         if (!done.isCompleted) done.completeExceptionally(IOException("failed to send notify"))
@@ -200,6 +210,25 @@ object RobotJsonRpcProxy {
         return normalized
     }
 
+    private fun requireCurrentRun(isCurrentRun: () -> Boolean) {
+        if (!isCurrentRun()) {
+            throw IOException(STALE_RUN_MESSAGE)
+        }
+    }
+
+    private fun completeIfStale(
+        result: CompletableDeferred<*>,
+        webSocket: WebSocket,
+        isCurrentRun: () -> Boolean,
+    ): Boolean {
+        if (isCurrentRun()) return true
+        if (!result.isCompleted) {
+            result.completeExceptionally(IOException(STALE_RUN_MESSAGE))
+        }
+        webSocket.close(1000, "run-superseded")
+        return false
+    }
+
     private fun identityRequestPayload(): JSONObject {
         return JSONObject()
             .put("type", IDENTITY_REQUEST_TYPE)
@@ -227,4 +256,6 @@ object RobotJsonRpcProxy {
             else -> null
         }
     }
+
+    private const val STALE_RUN_MESSAGE = "connector run superseded"
 }

@@ -8,7 +8,9 @@
 - Разрешение ожидаемой личности больше не возвращает saved device id, если `savedDeviceIdIsAuthoritative=false`; без нового bundle/panel/local verification generic discovery не стартует.
 - `RobotJsonRpcProxy.notify()` завершает успех только после нормального WebSocket close-handshake. Это закрывает гонку, при которой queued frame мог быть отменён в `finally` до доставки.
 - Первый re-review выявил отдельное окно позднего `stopSelf()` старой coroutine. Service теперь хранит `startId` активной конфигурации и использует `stopSelfResult(oldStartId)`: если Android уже принял более новый start request, старый запуск только завершается и не останавливает новый.
-- Добавлены отрицательные unit-тесты на отсутствие fallback к старому device id и на несовпадение текущих robot/device/host данных connector service.
+- Review `221f6d8` подтвердил это исправление, но нашёл следующий P1: старый WebSocket listener мог дождаться задержанного identity-result и отправить функциональный payload после замены `robot_host` / `expected_device_id`.
+- Текущий фикс передаёт в `RobotJsonRpcProxy.call/notify` fail-closed callback актуального run (`config + startId + captured Job`) и проверяет его прямо перед payload send. Перед отправкой `mcp_response` в Hub также выполняется повторная проверка актуальности.
+- Добавлены отрицательные unit-тесты на отсутствие fallback к старому device id, на несовпадение текущих robot/device/host данных connector service и на запрет функционального payload при delayed identity + superseded run.
 - Локально проходят `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `git diff --check`. Следующий шаг — повторный immutable review на GPT-5.5/xhigh; до его PASS ветка остаётся `NO-GO` для merge и установки.
 
 ## Контрольная точка 2026-08-25

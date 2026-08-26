@@ -7,6 +7,8 @@
 - Исправление требует полного совпадения текущих `robot_id`, `expected_device_id` и `robot_host` для foreground service и исключает сохранённый device id из fallback, когда он объявлен неавторитетным.
 - WebSocket notification теперь ждёт нормальный close-handshake, поэтому `finally` больше не может отменить сокет до фактической отправки функционального кадра.
 - Повторный review нашёл race позднего `stopSelf()` старого запуска; текущий фикс переносит stop-fence на Android `startId` и использует `stopSelfResult(oldStartId)`, поэтому новый start request не может быть остановлен старой coroutine.
+- Review `221f6d8` подтвердил `startId`-границу, но нашёл P1 на более позднем участке: старый WebSocket listener мог отправить функциональный payload после задержанного identity-result уже после замены host/device.
+- Текущий фикс передаёт в `RobotJsonRpcProxy.call/notify` проверку актуального run (`config + startId + captured Job`) и выполняет её прямо перед payload send; перед `mcp_response` в Hub также стоит повторная проверка.
 - Полный локальный Android-шлюз проходит. Кандидат ещё должен получить повторный независимый AI Office PASS; APK и live state не трогать до этого результата.
 
 ## Самая свежая точка 2026-08-24
