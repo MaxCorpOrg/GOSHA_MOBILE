@@ -9,8 +9,9 @@
 - При проверке найден и устранён отдельный дефект доставки notification: `RobotJsonRpcProxy.notify()` ждёт нормального WebSocket close-handshake перед успехом.
 - Re-review первого исправления нашёл окно между новым persisted draft и новым `ACTION_START`, где поздний `stopSelf()` мог остановить новый service. Текущая остановка привязана к `startId` и идёт через `stopSelfResult(oldStartId)`; superseded coroutine не отменяет более новый start request.
 - Review `task-20260826T103629Z-android-startid-fence-gate-at-221f6d8` подтвердил `startId`-fence, но оставил P1: WebSocket listener старого запуска мог отправить payload после задержанного identity-result, если run был superseded уже после предварительной проверки service.
-- Исправлено: `RobotJsonRpcProxy.call/notify` принимает callback актуальности run и проверяет его перед открытием identity probe и прямо перед отправкой функционального payload. `ConnectorForegroundService` передаёт callback на основе `config + startId + captured Job` и повторно проверяет актуальность перед `mcp_response`.
-- Полный `testClientDebugUnitTest + assembleClientDebug + lintClientDebug` и `git diff --check` проходят. Нужен новый immutable AI Office review исправленного HEAD.
+- Коммит `1753a4d` закрыл delayed-identity сценарий, но строгий GPT-5.5 review нашёл остаточный `check -> send` TOCTOU и поздний `agent_status` после probe: P1 + P2, без P0.
+- Исправлено: `RobotJsonRpcProxy.call/notify` принимает атомарный барьер run, внутри которого под `connectorStateLock` одновременно проверяются `config + startId + captured Job + draft identity` и выполняется неблокирующий enqueue кадра. Hub `pong`, `mcp_response` и `agent_status` используют тот же барьер; после probe/presence стоят повторные проверки.
+- Полный `testClientDebugUnitTest` (133 теста) + `assembleClientDebug + lintClientDebug` и `git diff --check` проходят. Нужен повторный read-only review исправленного HEAD; AI Office terminal review пока недоступен из-за исчерпанных workspace credits, worker оставлен в `draining`.
 - APK, телефон, prefs и live robot не изменялись; flash, motion и trim по-прежнему запрещены из-за левой сервы.
 
 ## Свежая контрольная точка 2026-08-25

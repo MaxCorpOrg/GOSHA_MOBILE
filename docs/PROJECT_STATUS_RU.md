@@ -9,9 +9,10 @@
 - `RobotJsonRpcProxy.notify()` завершает успех только после нормального WebSocket close-handshake. Это закрывает гонку, при которой queued frame мог быть отменён в `finally` до доставки.
 - Первый re-review выявил отдельное окно позднего `stopSelf()` старой coroutine. Service теперь хранит `startId` активной конфигурации и использует `stopSelfResult(oldStartId)`: если Android уже принял более новый start request, старый запуск только завершается и не останавливает новый.
 - Review `221f6d8` подтвердил это исправление, но нашёл следующий P1: старый WebSocket listener мог дождаться задержанного identity-result и отправить функциональный payload после замены `robot_host` / `expected_device_id`.
-- Текущий фикс передаёт в `RobotJsonRpcProxy.call/notify` fail-closed callback актуального run (`config + startId + captured Job`) и проверяет его прямо перед payload send. Перед отправкой `mcp_response` в Hub также выполняется повторная проверка актуальности.
+- Коммит `1753a4d` добавил fail-closed callback актуального run, но строгий GPT-5.5 review нашёл реальный TOCTOU между callback и `WebSocket.send` (P1), а также позднюю отправку `agent_status` после длительного probe (P2); P0 нет.
+- Текущий фикс использует атомарный барьер side effect: под тем же `connectorStateLock`, которым заменяется активное поколение, проверяются `config`, `startId`, captured Job и persisted identity, после чего сразу выполняется неблокирующий enqueue robot/Hub-кадра. `mcp_response`, `pong` и `agent_status` проходят через этот барьер, а после probe/presence стоят повторные проверки.
 - Добавлены отрицательные unit-тесты на отсутствие fallback к старому device id, на несовпадение текущих robot/device/host данных connector service и на запрет функционального payload при delayed identity + superseded run.
-- Локально проходят `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `git diff --check`. Следующий шаг — повторный immutable review на GPT-5.5/xhigh; до его PASS ветка остаётся `NO-GO` для merge и установки.
+- Локально проходят 133 unit-теста, `assembleClientDebug`, `lintClientDebug` и `git diff --check`. Следующий шаг — повторный read-only review на GPT-5.5/xhigh; terminal AI Office review временно заблокирован исчерпанными workspace credits. До PASS ветка остаётся `NO-GO` для merge и установки.
 
 ## Контрольная точка 2026-08-25
 

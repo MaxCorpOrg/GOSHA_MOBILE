@@ -137,6 +137,7 @@ class ConnectorForegroundService : Service() {
         var backoffSec = 1L
         val agentUrl = config.agentUrl()
 
+        if (!isCurrentConnectorRun(config, startId, runJob)) return
         publishStatus("Старт коннектора: ${config.robotId}")
         publishStatus("Hub: ${config.hubBaseUrl}")
         publishStatus("Robot WS: ${config.robotWsUrl()}")
@@ -150,17 +151,21 @@ class ConnectorForegroundService : Service() {
                     url = agentUrl,
                     expectedRobotId = config.robotId,
                 )
+                if (!isCurrentConnectorRun(config, startId, runJob)) {
+                    hub.close()
+                    return
+                }
                 publishStatus("Hub готов к маршрутизации")
                 setConnectorState("hub_ready")
                 backoffSec = 1L
                 var heartbeatJob: kotlinx.coroutines.Job? = null
                 try {
-                    publishAgentStatus(hub, config, startId)
+                    publishAgentStatus(hub, config, startId, runJob)
 
                     heartbeatJob = serviceScope.launch(runJob) {
                         while (isActive) {
                             delay(15_000)
-                            publishAgentStatus(hub, config, startId)
+                            publishAgentStatus(hub, config, startId, runJob)
                         }
                     }
 
@@ -177,6 +182,7 @@ class ConnectorForegroundService : Service() {
                     hub.close()
                 }
             } catch (exc: Exception) {
+                if (!isCurrentConnectorRun(config, startId, runJob)) break
                 publishStatus("Ошибка: ${exc.message}")
                 setConnectorState("hub_error")
             }
@@ -197,7 +203,7 @@ class ConnectorForegroundService : Service() {
         while (serviceScope.isActive && runJob.isActive) {
             if (!ensureCurrentConnectorIdentity(config, startId)) break
             try {
-                refreshPanelPresence(config, startId = startId)
+                refreshPanelPresence(config, startId = startId, runJob = runJob)
             } catch (exc: Exception) {
                 Log.w(logTag, "Presence refresh failed: ${exc.message}")
             }
@@ -222,67 +228,80 @@ class ConnectorForegroundService : Service() {
             "agent_ready" -> {
                 publishStatus("Hub готов к маршрутизации")
                 setConnectorState("hub_ready")
-                publishAgentStatus(hub, config, startId)
+                publishAgentStatus(hub, config, startId, runJob)
             }
 
             "ping" -> {
-                sendToHub(
+                if (!sendToHubIfCurrent(
                     hub,
                     JSONObject().put("type", "pong").put("ts", System.currentTimeMillis() / 1000).toString(),
                     "pong",
-                )
-                publishAgentStatus(hub, config, startId)
+                    config,
+                    startId,
+                    runJob,
+                )) return
+                publishAgentStatus(hub, config, startId, runJob)
             }
 
             "mcp_notify" -> {
                 val payload = msg.optJSONObject("payload") ?: return
-                val isCurrentRun = { isCurrentConnectorRun(config, startId, runJob) }
+                val withCurrentRun = { action: () -> Boolean ->
+                    withCurrentConnectorRun(config, startId, runJob, action)
+                }
                 try {
                     RobotJsonRpcProxy.notify(
                         http = localRobotHttpClient(),
                         robotWsUrl = config.robotWsUrl(),
                         payload = payload,
                         expectedDeviceId = config.expectedDeviceId,
-                        isCurrentRun = isCurrentRun,
+                        withCurrentRun = withCurrentRun,
                     )
-                    if (!isCurrentRun()) return
+                    if (!isCurrentConnectorRun(config, startId, runJob)) return
                     setRobotWsState(true, "")
                 } catch (exc: Exception) {
-                    if (!isCurrentRun()) return
+                    if (!isCurrentConnectorRun(config, startId, runJob)) return
                     publishStatus("notify->robot failed: ${exc.message}")
                     setRobotWsState(false, exc.message ?: "notify failed")
                 }
-                publishAgentStatus(hub, config, startId)
+                publishAgentStatus(hub, config, startId, runJob)
             }
 
             "mcp_request" -> {
                 val bridgeId = msg.optString("bridge_id")
                 val payload = msg.optJSONObject("payload") ?: return
-                val isCurrentRun = { isCurrentConnectorRun(config, startId, runJob) }
+                val withCurrentRun = { action: () -> Boolean ->
+                    withCurrentConnectorRun(config, startId, runJob, action)
+                }
                 val responsePayload = try {
                     val response = RobotJsonRpcProxy.call(
                         http = localRobotHttpClient(),
                         robotWsUrl = config.robotWsUrl(),
                         payload = payload,
                         expectedDeviceId = config.expectedDeviceId,
-                        isCurrentRun = isCurrentRun,
+                        withCurrentRun = withCurrentRun,
                     )
-                    if (!isCurrentRun()) return
+                    if (!isCurrentConnectorRun(config, startId, runJob)) return
                     setRobotWsState(true, "")
                     response
                 } catch (exc: Exception) {
-                    if (!isCurrentRun()) return
+                    if (!isCurrentConnectorRun(config, startId, runJob)) return
                     setRobotWsState(false, exc.message ?: "request failed")
                     jsonRpcError(payload.opt("id"), "mobile connector error: ${exc.message}")
                 }
-                if (!isCurrentRun()) return
                 val envelope = JSONObject()
                     .put("type", "mcp_response")
                     .put("bridge_id", bridgeId)
                     .put("payload", responsePayload)
                     .put("ts", System.currentTimeMillis() / 1000)
-                sendToHub(hub, envelope.toString(), "mcp_response")
-                publishAgentStatus(hub, config, startId)
+                if (!sendToHubIfCurrent(
+                    hub,
+                    envelope.toString(),
+                    "mcp_response",
+                    config,
+                    startId,
+                    runJob,
+                )) return
+                publishAgentStatus(hub, config, startId, runJob)
             }
         }
     }
@@ -291,14 +310,17 @@ class ConnectorForegroundService : Service() {
         hub: HubSocket,
         config: ConnectorConfig,
         startId: Int,
+        runJob: kotlinx.coroutines.Job,
     ) {
-        if (!ensureCurrentConnectorIdentity(config, startId)) return
+        if (!isCurrentConnectorRun(config, startId, runJob)) return
         val probe = probeRobotWs(config)
+        if (!isCurrentConnectorRun(config, startId, runJob)) return
         runCatching {
-            refreshPanelPresence(config, probe, startId)
+            refreshPanelPresence(config, probe, startId, runJob)
         }.onFailure { exc ->
             Log.w(logTag, "Panel presence refresh failed during agent status: ${exc.message}")
         }
+        if (!isCurrentConnectorRun(config, startId, runJob)) return
 
         val status = JSONObject()
             .put("connector_status", lastConnectorState)
@@ -315,7 +337,7 @@ class ConnectorForegroundService : Service() {
             .put("robot_ws_probe_min_interval_ms", probe.serviceMinIntervalMs)
             .put("updated_at", System.currentTimeMillis() / 1000)
 
-        sendToHub(
+        sendToHubIfCurrent(
             hub,
             JSONObject()
                 .put("type", "agent_status")
@@ -323,13 +345,27 @@ class ConnectorForegroundService : Service() {
                 .put("ts", System.currentTimeMillis() / 1000)
                 .toString(),
             "agent_status",
+            config,
+            startId,
+            runJob,
         )
     }
 
-    private fun sendToHub(hub: HubSocket, text: String, messageType: String) {
-        if (!hub.send(text)) {
+    private fun sendToHubIfCurrent(
+        hub: HubSocket,
+        text: String,
+        messageType: String,
+        config: ConnectorConfig,
+        startId: Int,
+        runJob: kotlinx.coroutines.Job,
+    ): Boolean {
+        val sent = withCurrentConnectorRun(config, startId, runJob) {
+            hub.send(text)
+        } ?: return false
+        if (!sent) {
             throw IOException("failed to send $messageType to hub")
         }
+        return true
     }
 
     private suspend fun probeRobotWs(config: ConnectorConfig): ServiceRobotWsProbeResult {
@@ -396,8 +432,9 @@ class ConnectorForegroundService : Service() {
         config: ConnectorConfig,
         probeResult: ServiceRobotWsProbeResult? = null,
         startId: Int,
+        runJob: kotlinx.coroutines.Job,
     ) {
-        if (!ensureCurrentConnectorIdentity(config, startId)) return
+        if (!isCurrentConnectorRun(config, startId, runJob)) return
         val probe = probeResult ?: run {
             probeRobotWs(config)
         }
@@ -410,7 +447,7 @@ class ConnectorForegroundService : Service() {
         }
 
         val draft = configStore.loadDraft()
-        if (!ensureCurrentConnectorIdentity(config, startId, draft)) {
+        if (!runJob.isActive || !ensureCurrentConnectorIdentity(config, startId, draft)) {
             return
         }
 
@@ -426,6 +463,7 @@ class ConnectorForegroundService : Service() {
             instanceId = runtimeEventReporter.sessionId,
             appVersion = BuildConfig.VERSION_NAME,
         )
+        if (!isCurrentConnectorRun(config, startId, runJob)) return
         val target = RuntimeEventTarget(
             baseUrl = draft.panelBaseUrl,
             robotId = config.robotId,
@@ -510,6 +548,30 @@ class ConnectorForegroundService : Service() {
         runJob: kotlinx.coroutines.Job,
     ): Boolean {
         return runJob.isActive && ensureCurrentConnectorIdentity(config, startId)
+    }
+
+    private fun withCurrentConnectorRun(
+        config: ConnectorConfig,
+        startId: Int,
+        runJob: kotlinx.coroutines.Job,
+        action: () -> Boolean,
+    ): Boolean? {
+        val draft = configStore.loadDraft()
+        return synchronized(connectorStateLock) {
+            if (
+                !runJob.isActive ||
+                activeConnectorConfig !== config ||
+                activeConnectorStartId != startId ||
+                !connectorIdentityMatchesDraft(config, draft)
+            ) {
+                null
+            } else {
+                // startOrRestart() replaces the active generation under this same lock.
+                // Keep action limited to a non-blocking WebSocket enqueue so the check
+                // and its side effect have one linearization point.
+                action()
+            }
+        }
     }
 
     private fun setRobotWsState(ok: Boolean, error: String) {

@@ -8,9 +8,10 @@
 - Дополнительно устранена потеря WebSocket notification: операция считается доставленной только после нормального close-handshake, а не сразу после постановки кадра в очередь.
 - Первый re-review выявил поздний `stopSelf()` старой coroutine между сохранением нового draft и обработкой нового `ACTION_START`. Остановка теперь привязана к Android `startId`: `stopSelfResult(oldStartId)` не может остановить более новый start request.
 - Финальный review `task-20260826T103629Z-android-startid-fence-gate-at-221f6d8` подтвердил startId-fence, но нашёл новый P1: старый запуск мог открыть WebSocket, дождаться задержанного `gosha.identity.result` и отправить функциональный payload уже после замены `robot_host` / `expected_device_id`.
-- Текущий фикс добавляет fail-closed callback актуальности `config + startId + captured Job` в `RobotJsonRpcProxy.call/notify`; callback проверяется перед identity probe и непосредственно перед отправкой payload. `ConnectorForegroundService` также проверяет актуальность перед отправкой `mcp_response` в Hub.
+- Коммит `1753a4d` добавил fail-closed callback актуальности `config + startId + captured Job`, однако строгий GPT-5.5 review подтвердил ещё одно межпоточное окно между возвратом callback и фактическим `WebSocket.send`, а также поздний `agent_status` после длительного probe.
+- Текущий фикс заменяет проверочный callback атомарным барьером: актуальность поколения и сам enqueue robot/Hub-кадра выполняются под тем же lock, которым `startOrRestart` меняет активные `config/startId`. После probe и presence выполняются повторные проверки, а `agent_status`, `pong` и `mcp_response` отправляются только через этот барьер.
 - Добавлены регрессии с задержанным identity-result и superseded run для `notify` и `call`: после смены запуска в сокет уходит только `gosha.identity.get`, функциональный payload не отправляется.
-- `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `git diff --check` проходят. Следующий шаг — коммит, push и новый неизменяемый AI Office review исправленного HEAD.
+- `testClientDebugUnitTest` (133 теста), `assembleClientDebug`, `lintClientDebug` и `git diff --check` проходят. Следующий шаг — коммит, push и повторный read-only review исправленного HEAD. Terminal AI Office review временно заблокирован внешним лимитом workspace credits, worker возвращён в `draining`.
 - APK, телефон, сохранённые настройки приложения и физический робот в этой работе не изменялись. До PASS повторного review установка и live-приёмка запрещены.
 
 ## Свежая точка 2026-08-25

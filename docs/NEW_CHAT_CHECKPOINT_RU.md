@@ -8,8 +8,9 @@
 - WebSocket notification теперь ждёт нормальный close-handshake, поэтому `finally` больше не может отменить сокет до фактической отправки функционального кадра.
 - Повторный review нашёл race позднего `stopSelf()` старого запуска; текущий фикс переносит stop-fence на Android `startId` и использует `stopSelfResult(oldStartId)`, поэтому новый start request не может быть остановлен старой coroutine.
 - Review `221f6d8` подтвердил `startId`-границу, но нашёл P1 на более позднем участке: старый WebSocket listener мог отправить функциональный payload после задержанного identity-result уже после замены host/device.
-- Текущий фикс передаёт в `RobotJsonRpcProxy.call/notify` проверку актуального run (`config + startId + captured Job`) и выполняет её прямо перед payload send; перед `mcp_response` в Hub также стоит повторная проверка.
-- Полный локальный Android-шлюз проходит. Кандидат ещё должен получить повторный независимый AI Office PASS; APK и live state не трогать до этого результата.
+- Коммит `1753a4d` передал в proxy проверку актуального run, но строгий GPT-5.5 review нашёл остаточный TOCTOU между этой проверкой и `send`, плюс поздний `agent_status` после длительного probe.
+- Текущий фикс выполняет проверку поколения и enqueue robot/Hub-кадра одной атомарной операцией под service lock; после probe/presence запуск проверяется повторно. Полный локальный Android-шлюз проходит.
+- Кандидат ещё должен получить повторный read-only PASS. Terminal AI Office review временно заблокирован исчерпанными workspace credits; APK и live state не трогать до закрытия gate.
 
 ## Самая свежая точка 2026-08-24
 

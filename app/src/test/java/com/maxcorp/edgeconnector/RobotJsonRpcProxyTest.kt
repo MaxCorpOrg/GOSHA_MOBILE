@@ -163,7 +163,9 @@ class RobotJsonRpcProxyTest {
                         payload = JSONObject().put("method", "self.test"),
                         expectedDeviceId = "aa:bb:cc:dd:ee:ff",
                         timeoutMs = 2_000L,
-                        isCurrentRun = { currentRun.get() },
+                        withCurrentRun = { action ->
+                            if (currentRun.get()) action() else null
+                        },
                     )
                 }
             }
@@ -206,7 +208,9 @@ class RobotJsonRpcProxyTest {
                             .put("method", "self.test"),
                         expectedDeviceId = "aa:bb:cc:dd:ee:ff",
                         timeoutMs = 2_000L,
-                        isCurrentRun = { currentRun.get() },
+                        withCurrentRun = { action ->
+                            if (currentRun.get()) action() else null
+                        },
                     )
                 }
             }
