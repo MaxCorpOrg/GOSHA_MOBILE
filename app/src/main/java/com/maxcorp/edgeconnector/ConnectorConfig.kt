@@ -51,6 +51,7 @@ private const val K_CONNECTOR_ROBOT_HOST = "connector_robot_host"
 private const val K_CONNECTOR_ROBOT_PORT = "connector_robot_port"
 private const val K_CONNECTOR_ROBOT_PATH = "connector_robot_path"
 private const val K_BACKGROUND_ACCESS_GUIDANCE_VERSION = "background_access_guidance_version"
+private const val K_BACKGROUND_ACCESS_GUIDANCE_DEFERRED_UNTIL_MS = "background_access_guidance_deferred_until_ms"
 private const val K_NOTIFICATION_PERMISSION_PROMPT_VERSION = "notification_permission_prompt_version"
 
 private const val CLIENT_NAME = "android-app"
@@ -351,8 +352,10 @@ data class ConnectorConfig(
     }
 }
 
-class ConfigStore(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+class ConfigStore internal constructor(
+    private val prefs: SharedPreferences,
+) {
+    constructor(context: Context) : this(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE))
 
     fun loadConfig(): ConnectorConfig? {
         val hub = prefs.getString(K_CONNECTOR_HUB_URL, "")?.ifBlank {
@@ -433,9 +436,18 @@ class ConfigStore(context: Context) {
     fun backgroundAccessGuidanceVersion(): Int =
         prefs.getInt(K_BACKGROUND_ACCESS_GUIDANCE_VERSION, 0)
 
+    fun backgroundAccessGuidanceDeferredUntilMs(): Long =
+        prefs.getLong(K_BACKGROUND_ACCESS_GUIDANCE_DEFERRED_UNTIL_MS, 0L)
+
     fun markBackgroundAccessGuidanceShown(version: Int) {
         prefs.edit()
             .putInt(K_BACKGROUND_ACCESS_GUIDANCE_VERSION, version)
+            .apply()
+    }
+
+    fun deferBackgroundAccessGuidanceUntil(timestampMs: Long) {
+        prefs.edit()
+            .putLong(K_BACKGROUND_ACCESS_GUIDANCE_DEFERRED_UNTIL_MS, timestampMs.coerceAtLeast(0L))
             .apply()
     }
 

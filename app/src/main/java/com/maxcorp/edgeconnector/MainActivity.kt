@@ -2979,6 +2979,8 @@ class MainActivity : AppCompatActivity() {
                 wifiReconnectPending = draft.wifiReconnectPending,
                 connectorConfigReady = draft.toConnectorConfigOrNull() != null,
                 shownVersion = configStore.backgroundAccessGuidanceVersion(),
+                nowMs = System.currentTimeMillis(),
+                deferredUntilMs = configStore.backgroundAccessGuidanceDeferredUntilMs(),
             )
         ) return
 
@@ -2986,15 +2988,28 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.background_access_dialog_title)
             .setMessage(R.string.background_access_transsion_instruction)
             .setNegativeButton(R.string.background_access_later) { _, _ ->
-                configStore.markBackgroundAccessGuidanceShown(
-                    BackgroundAccessPolicy.GUIDANCE_VERSION
+                persistBackgroundAccessGuidance(
+                    BackgroundAccessPolicy.guidancePersistenceForAction(
+                        BackgroundAccessGuidanceAction.LATER,
+                        System.currentTimeMillis(),
+                    )
                 )
             }
             .setPositiveButton(R.string.background_access_open_settings) { _, _ ->
-                configStore.markBackgroundAccessGuidanceShown(
-                    BackgroundAccessPolicy.GUIDANCE_VERSION
-                )
-                if (!BackgroundAccess.openSettings(this)) {
+                if (BackgroundAccess.openSettings(this)) {
+                    persistBackgroundAccessGuidance(
+                        BackgroundAccessPolicy.guidancePersistenceForAction(
+                            BackgroundAccessGuidanceAction.SETTINGS_LAUNCHED,
+                            System.currentTimeMillis(),
+                        )
+                    )
+                } else {
+                    persistBackgroundAccessGuidance(
+                        BackgroundAccessPolicy.guidancePersistenceForAction(
+                            BackgroundAccessGuidanceAction.SETTINGS_LAUNCH_FAILED,
+                            System.currentTimeMillis(),
+                        )
+                    )
                     toast(getString(R.string.background_access_open_error))
                 }
             }
@@ -3011,6 +3026,10 @@ class MainActivity : AppCompatActivity() {
             backgroundAccessDialog = null
             Log.w(logTag, "Background access guidance could not be shown: ${exc.message}")
         }
+    }
+
+    private fun persistBackgroundAccessGuidance(persistence: BackgroundAccessGuidancePersistence) {
+        persistence.deferredUntilMs?.let(configStore::deferBackgroundAccessGuidanceUntil)
     }
 
     private fun stopConnectorService() {
