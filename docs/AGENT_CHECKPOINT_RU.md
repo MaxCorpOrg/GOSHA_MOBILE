@@ -1,6 +1,15 @@
 # AGENT CHECKPOINT
 
-## Свежая контрольная точка 2026-08-26
+## Свежая контрольная точка 2026-08-27
+
+- Platform quality gate уже закрыт; Android Draft PR `#51` теперь тоже получил terminal AI Office `PASS`, но остаётся Draft/Open и не сливается.
+- Проверенный Android code head: `26530d8`. Terminal task `task-20260827T092032Z-immutable-terminal-android-pr-51-gate-at-26530d8` на фактическом профиле `GPT-5.5 / xhigh` завершился без P0/P1/P2.
+- Предыдущие immutable tasks на `de450fc` и `e72faf3` были `NO-GO`. Их findings закрыты: stale connector/presence/runtime/status, delayed stale command windows и ложное подтверждение фонового режима больше не проходят.
+- Полный Android gate на текущем кандидате: 146 unit tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`.
+- APK, телефон, prefs, live robot, firmware и relay в этой работе не изменялись.
+- Из-за неисправной левой сервы flash, motion и trim остаются запрещены. Следующий шаг — firmware gate, но только неподвижный read-only и без прошивки робота. Operator command gateway остаётся blocked.
+
+## Предыдущая контрольная точка 2026-08-26
 
 - Platform quality gate закрыт; продолжение идёт строго через Android Draft PR `#51`, без перехода к firmware раньше Android PASS.
 - AI Office reviewer GPT-5.5/xhigh проверил неизменяемый Android-коммит `62a11aa` и оставил два P1 без P0: stale foreground presence после замены физического устройства при том же `robot_id` и использование неавторитетного сохранённого `expected_device_id` в post-portal generic discovery.

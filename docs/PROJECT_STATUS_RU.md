@@ -1,5 +1,14 @@
 # PROJECT STATUS
 
+## Контрольная точка 2026-08-27: terminal Android PASS
+
+- Android Draft PR `#51` остаётся Draft/Open; проверенный code head кандидата — `26530d8`.
+- Terminal AI Office task `task-20260827T092032Z-immutable-terminal-android-pr-51-gate-at-26530d8` на фактическом профиле `GPT-5.5 / xhigh` завершился `PASS`: P0/P1/P2 не найдено.
+- Предыдущие immutable tasks на `de450fc` и `e72faf3` были `NO-GO`; stale connector/presence/runtime/status, delayed/stale command windows и ложное подтверждение background guidance закрыты в текущем кандидате.
+- Проверки кандидата: 146 unit tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`.
+- APK, телефон, живой робот, firmware и relay не изменялись; локальная работа была только кодовым и документационным gate без установки и без live-приёмки.
+- Из-за неисправной левой сервы сохраняется запрет на flash, motion и trim. Следующий quality gate — firmware, строго неподвижный read-only и без прошивки робота. Operator command gateway остаётся blocked до закрытия firmware gate.
+
 ## Контрольная точка 2026-08-26: исправление Android P1
 
 - После Platform PASS активирован Android gate Draft PR `#51`.
@@ -503,8 +512,8 @@
 2. P1 Android: отдельно воспроизвести и исправить восстановление после временной потери домашнего Wi-Fi или недоступности робота без полного перезапуска приложения.
 3. Во всех живых проверках робота не использовать внешние raw TCP-проверки, raw WebSocket-проверки и `nc -z` на порту `:8080`: они могут занять односессионный `WSControl`.
 4. Платформенный PR `#25` по `robot_ws_probe_state` уже слит merge-коммитом `ae72eea`; не дублировать правку в Android.
-5. P1: исправить правило показа OEM-инструкции, чтобы `Позже` или простое открытие настроек не скрывало её навсегда без подтверждения `Нет ограничений`.
-6. P1: пройти review опубликованных Android- и firmware-веток, не смешивая их с платформой и iOS.
+5. OEM-ограничение подсказки закрыто в Android head `26530d8`: `Позже` или простое открытие настроек больше не считается подтверждением `Нет ограничений`.
+6. Следующий quality gate — firmware, только неподвижный read-only без прошивки, flash, motion или trim; operator command gateway остаётся blocked.
 7. P2: обновить выпускной список проверок, закрепить SHA APK и прошивки и подготовить повторяемый регрессионный сценарий Android + прошивка + платформа.
 8. Для iOS:
    - основной отдельный контур теперь `GOSHA_MOBILE_IOS`;

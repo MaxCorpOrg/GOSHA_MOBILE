@@ -1,6 +1,19 @@
 # START HERE
 
-## Свежая точка 2026-08-26
+## Свежая точка 2026-08-27
+
+- Android Draft PR `#51` остаётся Draft/Open. Проверенный code head кандидата:
+  `26530d8`.
+- Terminal AI Office task
+  `task-20260827T092032Z-immutable-terminal-android-pr-51-gate-at-26530d8`
+  на фактическом профиле `GPT-5.5 / xhigh` завершился `PASS`: P0/P1/P2 не найдено.
+- Предыдущие immutable tasks на `de450fc` и `e72faf3` были `NO-GO`; найденные там findings закрыты в текущем кандидате.
+- Проверки кандидата: `testClientDebugUnitTest` — 146 tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`.
+- Закрыты stale connector/presence/runtime/status и ложное подтверждение фоновой инструкции: простое открытие настроек больше не считается подтверждением режима `Нет ограничений` / background access.
+- APK, телефон, живой робот, firmware и relay в этой работе не изменялись.
+- Из-за неисправной левой сервы сохраняется запрет на flash, motion и trim. Следующий quality gate — firmware, но только неподвижный read-only без прошивки робота. `feature/operator-command-gateway` остаётся blocked.
+
+## Предыдущая точка 2026-08-26
 
 - Platform quality gate уже закрыт; активный обязательный этап — Android Draft PR `#51` в ветке `feature/mobile-triangle-runtime`.
 - Независимый AI Office reviewer на GPT-5.5/xhigh проверил предыдущий Android-кандидат `62a11aa` и нашёл два P1: stale foreground service мог опубликовать host прежнего физического робота, а post-portal discovery мог вернуть сохранённый неавторитетный `expected_device_id`.

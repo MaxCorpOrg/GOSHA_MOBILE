@@ -1,6 +1,16 @@
 # NEW CHAT CHECKPOINT
 
-## Самая свежая точка 2026-08-26
+## Самая свежая точка 2026-08-27
+
+- Активная ветка PR — `feature/mobile-triangle-runtime`, Android Draft PR `#51` остаётся Draft/Open. Проверенный code head: `26530d8`.
+- Terminal AI Office task `task-20260827T092032Z-immutable-terminal-android-pr-51-gate-at-26530d8` на `GPT-5.5 / xhigh` завершился `PASS`: P0/P1/P2 не найдено.
+- Предыдущие immutable tasks на `de450fc` и `e72faf3` были `NO-GO`; их findings закрыты в текущем кандидате.
+- Проверки: `testClientDebugUnitTest` — 146 tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`.
+- Закрыты stale connector/presence/runtime/status и ложное подтверждение фонового режима: простое открытие настроек больше не считается подтверждением режима `Нет ограничений`.
+- APK, телефон, живой робот, firmware и relay не трогались.
+- Из-за неисправной левой сервы сохраняется запрет на flash, motion и trim. Следующий gate — firmware, только неподвижный read-only и без прошивки. Operator command gateway остаётся blocked.
+
+## Предыдущая точка 2026-08-26
 
 - Активная ветка — `feature/mobile-triangle-runtime`, активный gate — Android Draft PR `#51`; Platform gate уже пройден.
 - Review коммита `62a11aa` дал `NO-GO` с двумя P1: stale публикация `home_wifi_local` старой foreground-службой после смены физического устройства и fallback к старому сохранённому `expected_device_id` в post-portal discovery.
@@ -358,13 +368,13 @@
    - stale `onAvailable/onLost/onUnavailable` защищены поколением запроса;
    - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug` завершён успешно в каноническом worktree за `2m 21s`;
    - живое подтверждение на `TECNO LI9` завершено `2026-07-21`: повторного диалога после `submit` нет, возврат в `MENU`, свежая панель и фоновая служба подтверждены.
-6. Следующий основной Android-приоритет — воспроизвести и исправить восстановление без полного перезапуска приложения после временной потери домашнего Wi-Fi или недоступности робота.
+6. Следующий quality gate — firmware, только неподвижный read-only без прошивки, flash, motion или trim; operator command gateway остаётся blocked.
 7. Обработать единичный `code=0` на `/scan` без JavaScript-ошибки страницы и без возврата `candidate=default`.
 8. Провести чистую аппаратную диагностику:
    - подтвердить активный OTA-раздел по загрузочному UART-журналу;
    - независимо получить `ota.label` через локальный `self.get_system_info`;
    - сравнить первую и повторную Wi-Fi-подсказку по `wifi_prompt_diag`.
-9. Исправить известное ограничение OEM-подсказки: `Позже` или открытие настроек не должно навсегда считаться подтверждением режима `Нет ограничений`.
+9. OEM-подсказка закрыта в Android head `26530d8`: `Позже` или открытие настроек больше не считается подтверждением режима `Нет ограничений`.
 10. Платформенный P1 уже слит отдельно в `GOSHA_PLATFORM` PR `#25`, merge-коммит `ae72eea`; не переносить его в мобильный клиент.
 11. Для iOS:
    - перейти в отдельный репозиторий `GOSHA_MOBILE_IOS`;
