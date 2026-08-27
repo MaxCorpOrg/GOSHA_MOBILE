@@ -21,6 +21,12 @@ data class RuntimeEventTarget(
     val onboardingCode: String = "",
 )
 
+internal sealed class RuntimeEventDeliveryResult {
+    data object Delivered : RuntimeEventDeliveryResult()
+    data object Stale : RuntimeEventDeliveryResult()
+    data class Failed(val failure: Throwable?) : RuntimeEventDeliveryResult()
+}
+
 internal fun isPermanentRuntimeEventRejection(failure: Throwable?): Boolean =
     failure is PanelHttpException && failure.statusCode in setOf(413, 422)
 
@@ -38,15 +44,19 @@ internal fun trimRuntimeEventOutbox(source: JSONArray, maxEvents: Int = 100): JS
  * Builds versioned mobile runtime events and keeps a bounded, secret-free
  * persistent outbox while the phone cannot reach the platform.
  */
-class RuntimeEventReporter(
-    context: Context,
+class RuntimeEventReporter internal constructor(
+    private val preferences: SharedPreferences,
     private val http: OkHttpClient,
 ) {
-    private val preferences: SharedPreferences = context.applicationContext.getSharedPreferences(
-        PREFERENCES_NAME,
-        Context.MODE_PRIVATE,
-    )
     private val sequence = AtomicLong(0)
+
+    constructor(context: Context, http: OkHttpClient) : this(
+        preferences = context.applicationContext.getSharedPreferences(
+            PREFERENCES_NAME,
+            Context.MODE_PRIVATE,
+        ),
+        http = http,
+    )
 
     val sourceId: String = synchronized(sourceIdLock) {
         preferences.getString(KEY_SOURCE_ID, "").orEmpty().ifBlank {
@@ -97,53 +107,112 @@ class RuntimeEventReporter(
             }
     }
 
-    suspend fun publish(target: RuntimeEventTarget, event: JSONObject): Boolean = outboxMutex.withLock {
-        if (target.robotId.isBlank()) return@withLock false
+    suspend fun publish(target: RuntimeEventTarget, event: JSONObject): Boolean {
+        if (!enqueue(target, event)) {
+            return false
+        }
+        if (target.baseUrl.isBlank()) {
+            return false
+        }
+        return flush(target)
+    }
+
+    suspend fun flush(target: RuntimeEventTarget): Boolean = flushMutex.withLock {
+        flushLocked(target) { item ->
+            sendRuntimeEvent(target, item)
+        }
+    }
+
+    internal suspend fun flush(
+        target: RuntimeEventTarget,
+        sender: suspend (JSONObject) -> RuntimeEventDeliveryResult,
+    ): Boolean = flushMutex.withLock {
+        flushLocked(target, sender)
+    }
+
+    internal suspend fun enqueueFromCurrentRun(
+        target: RuntimeEventTarget,
+        event: JSONObject,
+        isCurrent: () -> Boolean,
+    ): Boolean {
+        return flushMutex.withLock {
+            synchronized(outboxLock) {
+                if (target.robotId.isBlank() || !isCurrent()) {
+                    false
+                } else {
+                    enqueueLocked(target, event)
+                    if (isCurrent()) {
+                        true
+                    } else {
+                        removeFirstOutboxEvent(target.robotId, event)
+                        false
+                    }
+                }
+            }
+        }
+    }
+
+    private fun enqueue(target: RuntimeEventTarget, event: JSONObject): Boolean {
+        return synchronized(outboxLock) {
+            enqueueLocked(target, event)
+        }
+    }
+
+    private fun enqueueLocked(target: RuntimeEventTarget, event: JSONObject): Boolean {
+        if (target.robotId.isBlank()) return false
         val pending = readOutbox(target.robotId)
         pending.put(JSONObject(event.toString()))
         trimAndSaveOutbox(target.robotId, pending)
-        if (target.baseUrl.isBlank()) return@withLock false
-        flushLocked(target)
+        return true
     }
 
-    suspend fun flush(target: RuntimeEventTarget): Boolean = outboxMutex.withLock {
-        flushLocked(target)
-    }
-
-    private suspend fun flushLocked(target: RuntimeEventTarget): Boolean {
+    private suspend fun flushLocked(
+        target: RuntimeEventTarget,
+        sender: suspend (JSONObject) -> RuntimeEventDeliveryResult,
+    ): Boolean {
         if (target.robotId.isBlank() || target.baseUrl.isBlank()) return false
-        val pending = readOutbox(target.robotId)
-        if (pending.length() == 0) return true
-        val remaining = JSONArray()
-        var deliveryFailed = false
-        for (index in 0 until pending.length()) {
-            val item = pending.optJSONObject(index) ?: continue
-            if (deliveryFailed) {
-                remaining.put(item)
-                continue
-            }
-            val delivery = runCatching {
-                PanelApiClient.publishRuntimeEvent(
-                    http = http,
-                    baseUrl = target.baseUrl,
-                    robotId = target.robotId,
-                    event = item,
-                    panelClientToken = target.panelClientToken,
-                    onboardingCode = target.onboardingCode,
-                )
-            }
-            if (delivery.isSuccess) {
-                continue
-            }
-            val failure = delivery.exceptionOrNull()
-            val permanentlyRejected = isPermanentRuntimeEventRejection(failure)
-            if (!permanentlyRejected) {
-                deliveryFailed = true
-                remaining.put(item)
+        while (true) {
+            val item = synchronized(outboxLock) {
+                readOutbox(target.robotId).optJSONObject(0)
+            } ?: return true
+            when (val delivery = sender(item)) {
+                RuntimeEventDeliveryResult.Delivered -> {
+                    synchronized(outboxLock) {
+                        removeFirstOutboxEvent(target.robotId, item)
+                    }
+                }
+                RuntimeEventDeliveryResult.Stale -> return false
+                is RuntimeEventDeliveryResult.Failed -> {
+                    val permanentlyRejected = isPermanentRuntimeEventRejection(delivery.failure)
+                    if (permanentlyRejected) {
+                        synchronized(outboxLock) {
+                            removeFirstOutboxEvent(target.robotId, item)
+                        }
+                    } else {
+                        return false
+                    }
+                }
             }
         }
-        saveOutbox(target.robotId, remaining)
-        return !deliveryFailed
+    }
+
+    private suspend fun sendRuntimeEvent(
+        target: RuntimeEventTarget,
+        event: JSONObject,
+    ): RuntimeEventDeliveryResult {
+        return runCatching {
+            PanelApiClient.publishRuntimeEvent(
+                http = http,
+                baseUrl = target.baseUrl,
+                robotId = target.robotId,
+                event = event,
+                panelClientToken = target.panelClientToken,
+                onboardingCode = target.onboardingCode,
+            )
+        }.fold(
+            onSuccess = { RuntimeEventDeliveryResult.Delivered },
+            onFailure = { RuntimeEventDeliveryResult.Failed(it) },
+        )
     }
 
     private fun readOutbox(robotId: String): JSONArray {
@@ -153,6 +222,28 @@ class RuntimeEventReporter(
 
     private fun trimAndSaveOutbox(robotId: String, source: JSONArray) {
         saveOutbox(robotId, trimRuntimeEventOutbox(source, MAX_OUTBOX_EVENTS))
+    }
+
+    private fun removeFirstOutboxEvent(robotId: String, expected: JSONObject): Boolean {
+        val pending = readOutbox(robotId)
+        val remaining = JSONArray()
+        var removed = false
+        val expectedId = expected.optString("event_id", "")
+        for (index in 0 until pending.length()) {
+            val item = pending.optJSONObject(index) ?: continue
+            val matches = if (expectedId.isNotBlank()) {
+                item.optString("event_id", "") == expectedId
+            } else {
+                item.toString() == expected.toString()
+            }
+            if (!removed && matches) {
+                removed = true
+            } else {
+                remaining.put(item)
+            }
+        }
+        saveOutbox(robotId, remaining)
+        return removed
     }
 
     private fun saveOutbox(robotId: String, outbox: JSONArray) {
@@ -175,6 +266,7 @@ class RuntimeEventReporter(
         private const val KEY_OUTBOX_PREFIX = "outbox_"
         private const val MAX_OUTBOX_EVENTS = 100
         private val sourceIdLock = Any()
-        private val outboxMutex = Mutex()
+        private val flushMutex = Mutex()
+        private val outboxLock = Any()
     }
 }

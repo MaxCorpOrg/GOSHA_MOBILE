@@ -22,6 +22,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import java.io.IOException
@@ -46,13 +47,10 @@ class ConnectorForegroundService : Service() {
     private lateinit var notificationManager: NotificationManager
     private lateinit var runtimeEventReporter: RuntimeEventReporter
 
-    private var connectorJob = SupervisorJob()
-    private val connectorStateLock = Any()
-    @Volatile private var activeConnectorConfig: ConnectorConfig? = null
-    @Volatile private var activeConnectorStartId: Int = 0
+    private val runRegistry = ConnectorRunRegistry()
+    private val statusEmissionLock = Any()
     private val robotWsProbeTracker = ServiceRobotWsProbeTracker()
     @Volatile private var lastConnectorState: String = "idle"
-    @Volatile private var lastRuntimeProbeSignature: String = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -74,6 +72,10 @@ class ConnectorForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                val cancellation = synchronized(statusEmissionLock) {
+                    runRegistry.clear()
+                }
+                cancelConnectorRun(cancellation)
                 publishStatus("Остановлен пользователем")
                 stopSelf()
                 return START_NOT_STICKY
@@ -101,14 +103,10 @@ class ConnectorForegroundService : Service() {
 
     private fun startOrRestart(config: ConnectorConfig, startId: Int) {
         val nextJob = SupervisorJob()
-        synchronized(connectorStateLock) {
-            activeConnectorConfig = null
-            activeConnectorStartId = 0
-            connectorJob.cancel()
-            connectorJob = nextJob
-            activeConnectorConfig = config
-            activeConnectorStartId = startId
+        val cancellation = synchronized(statusEmissionLock) {
+            runRegistry.activate(config, startId, nextJob)
         }
+        cancelConnectorRun(cancellation)
         serviceScope.launch(nextJob) {
             runPanelPresenceLoop(config, startId, nextJob)
         }
@@ -117,8 +115,13 @@ class ConnectorForegroundService : Service() {
                 runConnectorLoop(config, startId, nextJob)
             }
         } else {
-            setConnectorState("hub_not_configured")
-            publishStatus("Edge Hub не настроен: работает локальная проверка и presence")
+            setConnectorStateIfCurrent("hub_not_configured", config, startId, nextJob)
+            publishStatusIfCurrent(
+                "Edge Hub не настроен: работает локальная проверка и presence",
+                config,
+                startId,
+                nextJob,
+            )
         }
     }
 
@@ -138,14 +141,14 @@ class ConnectorForegroundService : Service() {
         val agentUrl = config.agentUrl()
 
         if (!isCurrentConnectorRun(config, startId, runJob)) return
-        publishStatus("Старт коннектора: ${config.robotId}")
-        publishStatus("Hub: ${config.hubBaseUrl}")
-        publishStatus("Robot WS: ${config.robotWsUrl()}")
+        publishStatusIfCurrent("Старт коннектора: ${config.robotId}", config, startId, runJob)
+        publishStatusIfCurrent("Hub: ${config.hubBaseUrl}", config, startId, runJob)
+        publishStatusIfCurrent("Robot WS: ${config.robotWsUrl()}", config, startId, runJob)
 
         while (serviceScope.isActive && runJob.isActive) {
-            if (!ensureCurrentConnectorIdentity(config, startId)) break
+            if (!ensureCurrentConnectorIdentity(config, startId, runJob)) break
             try {
-                publishStatus("Подключение к Hub...")
+                publishStatusIfCurrent("Подключение к Hub...", config, startId, runJob)
                 val hub = HubSocket.connect(
                     http = httpClient,
                     url = agentUrl,
@@ -155,8 +158,8 @@ class ConnectorForegroundService : Service() {
                     hub.close()
                     return
                 }
-                publishStatus("Hub готов к маршрутизации")
-                setConnectorState("hub_ready")
+                publishStatusIfCurrent("Hub готов к маршрутизации", config, startId, runJob)
+                setConnectorStateIfCurrent("hub_ready", config, startId, runJob)
                 backoffSec = 1L
                 var heartbeatJob: kotlinx.coroutines.Job? = null
                 try {
@@ -170,26 +173,26 @@ class ConnectorForegroundService : Service() {
                     }
 
                     for (raw in hub.incoming) {
-                        if (!ensureCurrentConnectorIdentity(config, startId)) break
+                        if (!ensureCurrentConnectorIdentity(config, startId, runJob)) break
                         handleHubMessage(raw, hub, config, startId, runJob)
                     }
 
                     val reason = hub.awaitClosed()
-                    publishStatus("Hub закрыт: $reason")
-                    setConnectorState("hub_closed")
+                    publishStatusIfCurrent("Hub закрыт: $reason", config, startId, runJob)
+                    setConnectorStateIfCurrent("hub_closed", config, startId, runJob)
                 } finally {
                     heartbeatJob?.cancelAndJoin()
                     hub.close()
                 }
             } catch (exc: Exception) {
                 if (!isCurrentConnectorRun(config, startId, runJob)) break
-                publishStatus("Ошибка: ${exc.message}")
-                setConnectorState("hub_error")
+                publishStatusIfCurrent("Ошибка: ${exc.message}", config, startId, runJob)
+                setConnectorStateIfCurrent("hub_error", config, startId, runJob)
             }
 
             if (!runJob.isActive) break
 
-            publishStatus("Переподключение через ${backoffSec}s")
+            publishStatusIfCurrent("Переподключение через ${backoffSec}s", config, startId, runJob)
             delay(backoffSec * 1000)
             backoffSec = (backoffSec * 2).coerceAtMost(20L)
         }
@@ -201,7 +204,7 @@ class ConnectorForegroundService : Service() {
         runJob: kotlinx.coroutines.Job,
     ) {
         while (serviceScope.isActive && runJob.isActive) {
-            if (!ensureCurrentConnectorIdentity(config, startId)) break
+            if (!ensureCurrentConnectorIdentity(config, startId, runJob)) break
             try {
                 refreshPanelPresence(config, startId = startId, runJob = runJob)
             } catch (exc: Exception) {
@@ -226,8 +229,8 @@ class ConnectorForegroundService : Service() {
         }
         when (msg.optString("type")) {
             "agent_ready" -> {
-                publishStatus("Hub готов к маршрутизации")
-                setConnectorState("hub_ready")
+                publishStatusIfCurrent("Hub готов к маршрутизации", config, startId, runJob)
+                setConnectorStateIfCurrent("hub_ready", config, startId, runJob)
                 publishAgentStatus(hub, config, startId, runJob)
             }
 
@@ -260,7 +263,7 @@ class ConnectorForegroundService : Service() {
                     setRobotWsState(true, "")
                 } catch (exc: Exception) {
                     if (!isCurrentConnectorRun(config, startId, runJob)) return
-                    publishStatus("notify->robot failed: ${exc.message}")
+                    publishStatusIfCurrent("notify->robot failed: ${exc.message}", config, startId, runJob)
                     setRobotWsState(false, exc.message ?: "notify failed")
                 }
                 publishAgentStatus(hub, config, startId, runJob)
@@ -447,11 +450,11 @@ class ConnectorForegroundService : Service() {
         }
 
         val draft = configStore.loadDraft()
-        if (!runJob.isActive || !ensureCurrentConnectorIdentity(config, startId, draft)) {
+        if (!runJob.isActive || !ensureCurrentConnectorIdentity(config, startId, runJob)) {
             return
         }
 
-        PanelApiClient.updateMobilePresence(
+        val presenceCall = PanelApiClient.buildUpdateMobilePresenceCall(
             http = panelHttpClient,
             baseUrl = draft.panelBaseUrl,
             robotId = config.robotId,
@@ -463,74 +466,112 @@ class ConnectorForegroundService : Service() {
             instanceId = runtimeEventReporter.sessionId,
             appVersion = BuildConfig.VERSION_NAME,
         )
+        executePanelCallIfCurrent(
+            call = presenceCall,
+            config = config,
+            startId = startId,
+            runJob = runJob,
+        ) { call ->
+            PanelApiClient.executeUpdateMobilePresenceCall(call)
+        } ?: return
+
         if (!isCurrentConnectorRun(config, startId, runJob)) return
+        val runtimeDraft = configStore.loadDraft()
         val target = RuntimeEventTarget(
-            baseUrl = draft.panelBaseUrl,
+            baseUrl = runtimeDraft.panelBaseUrl,
             robotId = config.robotId,
-            panelClientToken = draft.panelClientToken,
-            onboardingCode = draft.onboardingCode,
+            panelClientToken = runtimeDraft.panelClientToken,
+            onboardingCode = runtimeDraft.onboardingCode,
         )
+        val connectorState = lastConnectorState
         val runtimeSignature = listOf(
             probe.ok,
             probe.state.wireValue,
-            lastConnectorState,
+            connectorState,
         ).joinToString("|")
-        if (runtimeSignature != lastRuntimeProbeSignature) {
-            runtimeEventReporter.publish(
-                target,
-                runtimeEventReporter.event(
-                    eventType = "mobile.robot_link.changed",
-                    severity = if (probe.ok) "info" else "warning",
-                    state = JSONObject()
-                        .put("domain", "connector")
-                        .put("name", lastConnectorState)
-                        .put("status", if (probe.ok) "ready" else "degraded"),
-                    link = JSONObject()
-                        .put("kind", "mobile_robot")
-                        .put("status", if (probe.ok) "available" else "unavailable"),
-                    error = if (probe.ok) {
-                        null
-                    } else {
-                        JSONObject()
-                            .put("code", "robot_probe_failed")
-                            .put("message", "Локальная проверка робота не выполнена")
-                            .put("retryable", true)
-                    },
-                    metrics = JSONObject()
-                        .put("probe_executed_count", probe.executedCount)
-                        .put("probe_skipped_count", probe.skippedCount)
-                        .put("probe_stale_count", probe.staleCount),
-                    attributes = JSONObject()
-                        .put("probe_state", probe.state.wireValue)
-                        .put("active_source", probe.activeSource),
-                ),
+        val runtimeSideEffect = runRegistry.claimRuntimeProbeIfCurrent(
+            config = config,
+            startId = startId,
+            job = runJob,
+            signature = runtimeSignature,
+            identityMatches = { connectorIdentityMatchesCurrentDraft(config) },
+        )
+        if (runtimeSideEffect == RuntimeProbeSideEffect.STALE) return
+        if (runtimeSideEffect == RuntimeProbeSideEffect.CLAIMED) {
+            val event = runtimeEventReporter.event(
+                eventType = "mobile.robot_link.changed",
+                severity = if (probe.ok) "info" else "warning",
+                state = JSONObject()
+                    .put("domain", "connector")
+                    .put("name", connectorState)
+                    .put("status", if (probe.ok) "ready" else "degraded"),
+                link = JSONObject()
+                    .put("kind", "mobile_robot")
+                    .put("status", if (probe.ok) "available" else "unavailable"),
+                error = if (probe.ok) {
+                    null
+                } else {
+                    JSONObject()
+                        .put("code", "robot_probe_failed")
+                        .put("message", "Локальная проверка робота не выполнена")
+                        .put("retryable", true)
+                },
+                metrics = JSONObject()
+                    .put("probe_executed_count", probe.executedCount)
+                    .put("probe_skipped_count", probe.skippedCount)
+                    .put("probe_stale_count", probe.staleCount),
+                attributes = JSONObject()
+                    .put("probe_state", probe.state.wireValue)
+                    .put("active_source", probe.activeSource),
             )
-            lastRuntimeProbeSignature = runtimeSignature
-        } else {
-            runtimeEventReporter.flush(target)
+            val accepted = runtimeEventReporter.enqueueFromCurrentRun(
+                target,
+                event,
+                isCurrent = { isConnectorRunCurrentNoStop(config, startId, runJob) },
+            )
+            if (!accepted) {
+                runRegistry.clearRuntimeProbeSignatureIfRun(config, startId, runJob, runtimeSignature)
+                return
+            }
+        }
+        flushRuntimeEventsIfCurrent(target, config, startId, runJob)
+    }
+
+    private fun connectorIdentityMatchesCurrentDraft(config: ConnectorConfig): Boolean {
+        return connectorIdentityMatchesDraft(config, configStore.loadDraft())
+    }
+
+    private fun isConnectorRunCurrentNoStop(
+        config: ConnectorConfig,
+        startId: Int,
+        runJob: kotlinx.coroutines.Job,
+    ): Boolean {
+        return runRegistry.isCurrent(config, startId, runJob) {
+            connectorIdentityMatchesCurrentDraft(config)
         }
     }
 
     private fun ensureCurrentConnectorIdentity(
         config: ConnectorConfig,
         startId: Int,
-        draft: OnboardingDraft = configStore.loadDraft(),
+        runJob: kotlinx.coroutines.Job,
     ): Boolean {
-        var shouldStop = false
-        val matches = synchronized(connectorStateLock) {
-            if (activeConnectorConfig !== config || activeConnectorStartId != startId) {
-                false
-            } else if (connectorIdentityMatchesDraft(config, draft)) {
-                true
-            } else {
-                activeConnectorConfig = null
-                activeConnectorStartId = 0
-                connectorJob.cancel()
-                shouldStop = true
-                false
-            }
+        if (runRegistry.isCurrent(config, startId, runJob) {
+            connectorIdentityMatchesCurrentDraft(config)
+        }) {
+            return true
         }
+        var currentIdentityMatches = true
+        val runStillCurrent = runRegistry.isCurrent(config, startId, runJob) {
+            currentIdentityMatches = connectorIdentityMatchesCurrentDraft(config)
+            true
+        }
+        val shouldStop = runStillCurrent && !currentIdentityMatches
         if (shouldStop) {
+            val cancellation = synchronized(statusEmissionLock) {
+                runRegistry.clearIfCurrent(config, startId, runJob)
+            }
+            cancelConnectorRun(cancellation)
             // stopSelfResult fences the stop to this start request: if Android has already
             // accepted a newer ACTION_START, an older coroutine cannot stop that new run.
             val stopped = stopSelfResult(startId)
@@ -539,7 +580,7 @@ class ConnectorForegroundService : Service() {
                 "Stale connector stop requested for startId=$startId; stopped=$stopped",
             )
         }
-        return matches
+        return false
     }
 
     private fun isCurrentConnectorRun(
@@ -547,7 +588,7 @@ class ConnectorForegroundService : Service() {
         startId: Int,
         runJob: kotlinx.coroutines.Job,
     ): Boolean {
-        return runJob.isActive && ensureCurrentConnectorIdentity(config, startId)
+        return runJob.isActive && ensureCurrentConnectorIdentity(config, startId, runJob)
     }
 
     private fun withCurrentConnectorRun(
@@ -556,30 +597,132 @@ class ConnectorForegroundService : Service() {
         runJob: kotlinx.coroutines.Job,
         action: () -> Boolean,
     ): Boolean? {
-        val draft = configStore.loadDraft()
-        return synchronized(connectorStateLock) {
-            if (
-                !runJob.isActive ||
-                activeConnectorConfig !== config ||
-                activeConnectorStartId != startId ||
-                !connectorIdentityMatchesDraft(config, draft)
-            ) {
-                null
-            } else {
-                // startOrRestart() replaces the active generation under this same lock.
-                // Keep action limited to a non-blocking WebSocket enqueue so the check
-                // and its side effect have one linearization point.
-                action()
-            }
+        var result = false
+        val ran = runRegistry.runIfCurrent(
+            config = config,
+            startId = startId,
+            job = runJob,
+            identityMatches = { connectorIdentityMatchesCurrentDraft(config) },
+        ) {
+            // startOrRestart() replaces the active generation under this same gate.
+            // Keep action limited to a non-blocking WebSocket enqueue so the check
+            // and its side effect have one linearization point.
+            result = action()
         }
+        return if (ran) result else null
     }
 
     private fun setRobotWsState(ok: Boolean, error: String) {
         robotWsProbeTracker.recordExternalObservation(ok, error, System.currentTimeMillis())
     }
 
-    private fun setConnectorState(state: String) {
-        lastConnectorState = state
+    private fun setConnectorStateIfCurrent(
+        state: String,
+        config: ConnectorConfig,
+        startId: Int,
+        runJob: kotlinx.coroutines.Job,
+    ) {
+        runRegistry.runIfCurrent(
+            config = config,
+            startId = startId,
+            job = runJob,
+            identityMatches = { connectorIdentityMatchesCurrentDraft(config) },
+        ) {
+            lastConnectorState = state
+        }
+    }
+
+    private fun <T> executePanelCallIfCurrent(
+        call: Call,
+        config: ConnectorConfig,
+        startId: Int,
+        runJob: kotlinx.coroutines.Job,
+        execute: (Call) -> T,
+    ): T? {
+        val registered = runRegistry.registerPanelCallIfCurrent(
+            config = config,
+            startId = startId,
+            job = runJob,
+            call = call,
+            identityMatches = { connectorIdentityMatchesCurrentDraft(config) },
+        )
+        if (!registered) {
+            call.cancel()
+            return null
+        }
+        return try {
+            val result = execute(call)
+            if (isCurrentConnectorRun(config, startId, runJob)) {
+                result
+            } else {
+                null
+            }
+        } catch (exc: IOException) {
+            val staleCancellation = call.isCanceled() && !runRegistry.isCurrent(
+                config = config,
+                startId = startId,
+                job = runJob,
+                identityMatches = { connectorIdentityMatchesCurrentDraft(config) },
+            )
+            if (staleCancellation) {
+                null
+            } else {
+                throw exc
+            }
+        } finally {
+            runRegistry.unregisterPanelCall(call)
+        }
+    }
+
+    private suspend fun flushRuntimeEventsIfCurrent(
+        target: RuntimeEventTarget,
+        config: ConnectorConfig,
+        startId: Int,
+        runJob: kotlinx.coroutines.Job,
+    ): Boolean {
+        if (!isCurrentConnectorRun(config, startId, runJob)) return false
+        if (target.robotId.isBlank() || target.baseUrl.isBlank()) return false
+        return runtimeEventReporter.flush(target) { event ->
+            if (!isConnectorRunCurrentNoStop(config, startId, runJob)) {
+                return@flush RuntimeEventDeliveryResult.Stale
+            }
+            val call = PanelApiClient.buildPublishRuntimeEventCall(
+                http = panelHttpClient,
+                baseUrl = target.baseUrl,
+                robotId = target.robotId,
+                event = event,
+                panelClientToken = target.panelClientToken,
+                onboardingCode = target.onboardingCode,
+            )
+            runCatching {
+                val delivered = executePanelCallIfCurrent(
+                    call = call,
+                    config = config,
+                    startId = startId,
+                    runJob = runJob,
+                ) { trackedCall ->
+                    PanelApiClient.executePublishRuntimeEventCall(trackedCall)
+                }
+                if (delivered == null) {
+                    RuntimeEventDeliveryResult.Stale
+                } else {
+                    RuntimeEventDeliveryResult.Delivered
+                }
+            }.getOrElse { failure ->
+                RuntimeEventDeliveryResult.Failed(failure)
+            }
+        }
+    }
+
+    private fun cancelConnectorRun(cancellation: ConnectorRunCancellation) {
+        cancellation.job?.cancel()
+        cancelPanelCalls(cancellation.panelCalls)
+    }
+
+    private fun cancelPanelCalls(calls: List<Call>) {
+        for (call in calls) {
+            call.cancel()
+        }
     }
 
     private fun jsonRpcError(id: Any?, message: String): JSONObject {
@@ -587,6 +730,26 @@ class ConnectorForegroundService : Service() {
         val root = JSONObject().put("jsonrpc", "2.0").put("error", errorObj)
         if (id != null) root.put("id", id)
         return root
+    }
+
+    @android.annotation.SuppressLint("NotificationPermission")
+    private fun publishStatusIfCurrent(
+        text: String,
+        config: ConnectorConfig,
+        startId: Int,
+        runJob: kotlinx.coroutines.Job,
+    ) {
+        synchronized(statusEmissionLock) {
+            val current = runRegistry.isCurrent(
+                config = config,
+                startId = startId,
+                job = runJob,
+                identityMatches = { connectorIdentityMatchesCurrentDraft(config) },
+            )
+            if (current) {
+                publishStatus(text)
+            }
+        }
     }
 
     @android.annotation.SuppressLint("NotificationPermission")
@@ -630,11 +793,10 @@ class ConnectorForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        synchronized(connectorStateLock) {
-            activeConnectorConfig = null
-            activeConnectorStartId = 0
-            connectorJob.cancel()
+        val cancellation = synchronized(statusEmissionLock) {
+            runRegistry.clear()
         }
+        cancelConnectorRun(cancellation)
         serviceScope.cancel()
         publishStatus("Сервис остановлен")
         super.onDestroy()

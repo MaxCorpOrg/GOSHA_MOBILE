@@ -2,6 +2,7 @@ package com.maxcorp.gosha.mobile
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -446,7 +447,35 @@ object PanelApiClient {
         instanceId: String = "",
         appVersion: String = "",
     ): JSONObject = withContext(Dispatchers.IO) {
-        val root = requestJson(
+        executeUpdateMobilePresenceCall(
+            buildUpdateMobilePresenceCall(
+                http = http,
+                baseUrl = baseUrl,
+                robotId = robotId,
+                state = state,
+                localHost = localHost,
+                panelClientToken = panelClientToken,
+                onboardingCode = onboardingCode,
+                sourceId = sourceId,
+                instanceId = instanceId,
+                appVersion = appVersion,
+            )
+        )
+    }
+
+    fun buildUpdateMobilePresenceCall(
+        http: OkHttpClient,
+        baseUrl: String,
+        robotId: String,
+        state: MobilePresenceState,
+        localHost: String = "",
+        panelClientToken: String = "",
+        onboardingCode: String = "",
+        sourceId: String = "",
+        instanceId: String = "",
+        appVersion: String = "",
+    ): Call {
+        return newJsonCall(
             http,
             normalizeBaseUrl(baseUrl) + "/api/mobile/robots/${robotId}/presence",
             "POST",
@@ -457,10 +486,14 @@ object PanelApiClient {
             },
             mobileHeaders(panelClientToken, onboardingCode),
         )
+    }
+
+    fun executeUpdateMobilePresenceCall(call: Call): JSONObject {
+        val root = executeJson(call)
         if (!root.optBoolean("ok", false)) {
             throw IOException(root.optString("error", "Не удалось передать локальный статус робота"))
         }
-        root.optJSONObject("snapshot") ?: JSONObject()
+        return root.optJSONObject("snapshot") ?: JSONObject()
     }
 
     suspend fun publishRuntimeEvent(
@@ -471,17 +504,41 @@ object PanelApiClient {
         panelClientToken: String = "",
         onboardingCode: String = "",
     ): JSONObject = withContext(Dispatchers.IO) {
-        val root = requestJson(
+        executePublishRuntimeEventCall(
+            buildPublishRuntimeEventCall(
+                http = http,
+                baseUrl = baseUrl,
+                robotId = robotId,
+                event = event,
+                panelClientToken = panelClientToken,
+                onboardingCode = onboardingCode,
+            )
+        )
+    }
+
+    fun buildPublishRuntimeEventCall(
+        http: OkHttpClient,
+        baseUrl: String,
+        robotId: String,
+        event: JSONObject,
+        panelClientToken: String = "",
+        onboardingCode: String = "",
+    ): Call {
+        return newJsonCall(
             http,
             normalizeBaseUrl(baseUrl) + "/api/mobile/robots/${robotId}/events",
             "POST",
             event,
             mobileHeaders(panelClientToken, onboardingCode),
         )
+    }
+
+    fun executePublishRuntimeEventCall(call: Call): JSONObject {
+        val root = executeJson(call)
         if (!root.optBoolean("ok", false)) {
             throw IOException(root.optString("error", "Не удалось передать событие состояния"))
         }
-        root
+        return root
     }
 
     internal fun parseRobotRuntimeSnapshot(item: JSONObject, robotId: String): RobotRuntimeSnapshot {
@@ -743,13 +800,30 @@ object PanelApiClient {
         }
     }
 
+    private fun newJsonCall(
+        http: OkHttpClient,
+        url: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+        headers: Map<String, String> = emptyMap(),
+    ): Call {
+        return http.newCall(buildJsonRequest(url, method, body, headers))
+    }
+
     private fun requestJson(
         http: OkHttpClient,
         url: String,
         method: String = "GET",
         body: JSONObject? = null,
         headers: Map<String, String> = emptyMap(),
-    ): JSONObject {
+    ): JSONObject = executeJson(newJsonCall(http, url, method, body, headers))
+
+    private fun buildJsonRequest(
+        url: String,
+        method: String,
+        body: JSONObject?,
+        headers: Map<String, String>,
+    ): Request {
         val builder = Request.Builder().url(url)
         for ((key, value) in headers) {
             if (value.isNotBlank()) {
@@ -759,7 +833,11 @@ object PanelApiClient {
         if (method != "GET") {
             builder.method(method, (body?.toString() ?: "{}").toRequestBody(JSON_MEDIA))
         }
-        http.newCall(builder.build()).execute().use { resp ->
+        return builder.build()
+    }
+
+    internal fun executeJson(call: Call): JSONObject {
+        call.execute().use { resp ->
             val raw = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
                 throw PanelHttpException(
