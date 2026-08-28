@@ -41,17 +41,39 @@ val runtimePanelBaseUrl = configValue("GOSHA_PANEL_BASE_URL")
 val rustorePrivacyPolicyUrl = configValue("RUSTORE_PRIVACY_POLICY_URL")
 val rustoreTermsOfUseUrl = configValue("RUSTORE_TERMS_OF_USE_URL")
 
+val releaseHttpUrlRequirements = mapOf(
+    "GOSHA_PANEL_BASE_URL" to runtimePanelBaseUrl,
+    "RUSTORE_PRIVACY_POLICY_URL" to rustorePrivacyPolicyUrl,
+    "RUSTORE_TERMS_OF_USE_URL" to rustoreTermsOfUseUrl,
+)
+
+fun releaseHttpUrlErrors(): List<String> =
+    releaseHttpUrlRequirements
+        .filterValues { !isHttpUrl(it) }
+        .keys
+        .toList()
+
+fun requireReleaseRuntimeConfig() {
+    val errors = releaseHttpUrlErrors()
+    require(errors.isEmpty()) {
+        "Release build requires valid http(s) URLs from keystore.properties, Gradle properties, or env: ${errors.joinToString(", ")}."
+    }
+}
+
 gradle.taskGraph.whenReady {
     val releaseRequested = allTasks.any { task ->
         task.name.contains("Release", ignoreCase = true)
     }
     if (releaseRequested) {
-        require(isHttpUrl(rustorePrivacyPolicyUrl)) {
-            "Release build requires RUSTORE_PRIVACY_POLICY_URL as an http(s) URL from keystore.properties, Gradle property, or env."
-        }
-        require(isHttpUrl(rustoreTermsOfUseUrl)) {
-            "Release build requires RUSTORE_TERMS_OF_USE_URL as an http(s) URL from keystore.properties, Gradle property, or env."
-        }
+        requireReleaseRuntimeConfig()
+    }
+}
+
+tasks.register("verifyReleaseRuntimeConfig") {
+    group = "verification"
+    description = "Fails unless release panel and legal URLs are configured explicitly."
+    doLast {
+        requireReleaseRuntimeConfig()
     }
 }
 

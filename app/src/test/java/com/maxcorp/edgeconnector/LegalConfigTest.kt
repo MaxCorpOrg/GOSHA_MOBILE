@@ -1,5 +1,6 @@
 package com.maxcorp.gosha.mobile
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,6 +18,18 @@ class LegalConfigTest {
     fun `legal url policy accepts explicit http urls`() {
         assertTrue(isHttpUrl("https://legal.example.test/privacy"))
         assertTrue(isHttpUrl("http://legal.example.test/terms"))
+    }
+
+    @Test
+    fun `release runtime policy rejects blank panel endpoint even when legal urls are valid`() {
+        assertFalse(isHttpUrl(""))
+        assertTrue(isHttpUrl("https://legal.example.test/privacy"))
+        assertTrue(isHttpUrl("https://legal.example.test/terms"))
+    }
+
+    @Test
+    fun `debug default panel endpoint remains blank without release config`() {
+        assertEquals("", runtimeDefaultPanelBaseUrl())
     }
 
     @Test

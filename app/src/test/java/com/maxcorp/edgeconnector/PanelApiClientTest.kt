@@ -63,7 +63,7 @@ class PanelApiClientTest {
     @Test
     fun `runtime snapshot does not treat configured control as connected without live evidence`() {
         val snapshot = buildSnapshot(
-            diagnosticsTarget = "ws://151.241.228.232:18080/mcp/?token=test&robot_id=gosha-main",
+            diagnosticsTarget = "ws://voice.example.test:18080/mcp/?token=test&robot_id=gosha-main",
             diagnosticsMode = "cloud-mcp",
             transportState = "configured",
             controlTransport = "cloud-mcp",
@@ -98,7 +98,7 @@ class PanelApiClientTest {
     @Test
     fun `runtime snapshot trusts fresh self-hosted device contact only when server says so`() {
         val snapshot = buildSnapshot(
-            diagnosticsTarget = "ws://151.241.228.232:18080/mcp/?token=test&robot_id=gosha-main",
+            diagnosticsTarget = "ws://voice.example.test:18080/mcp/?token=test&robot_id=gosha-main",
             diagnosticsMode = "cloud-mcp",
             transportState = "configured",
             connectivityHasConnected = true,
@@ -116,7 +116,7 @@ class PanelApiClientTest {
     @Test
     fun `runtime snapshot keeps board ip as local host hint when direct local host is absent`() {
         val snapshot = buildSnapshot(
-            diagnosticsTarget = "ws://151.241.228.232:18080/mcp/?token=test&robot_id=gosha-main",
+            diagnosticsTarget = "ws://voice.example.test:18080/mcp/?token=test&robot_id=gosha-main",
             diagnosticsMode = "cloud-mcp",
             transportState = "configured",
             cloudBoardIp = "192.168.1.159",

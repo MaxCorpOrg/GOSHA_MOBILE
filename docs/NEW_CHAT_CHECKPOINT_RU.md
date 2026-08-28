@@ -1,5 +1,15 @@
 # NEW CHAT CHECKPOINT
 
+## Самая свежая точка 2026-08-28
+
+- Текущая рабочая ветка: `codex/mobile-runtime-config-hardening-20260828` в `/home/max/GOSHA_MOBILE_WORKTREES/mobile-runtime-config-hardening-20260828`, база — `61b8d1e`.
+- Цель ветки: закрыть P1, при котором release мог пройти без `GOSHA_PANEL_BASE_URL`.
+- Исправление: `release`-сборка и `build_rustore_release.sh` требуют валидные `http(s)` `GOSHA_PANEL_BASE_URL`, `RUSTORE_PRIVACY_POLICY_URL` и `RUSTORE_TERMS_OF_USE_URL`; без них сборка падает заранее. Debug default для panel URL остаётся пустым.
+- Fresh install / activation: если адрес панели не настроен, приложение показывает понятную ошибку и не отправляет запрос в пустой endpoint.
+- Проверено локально, строго без телефона и live robot: negative/positive `:app:verifyReleaseRuntimeConfig`, `testClientDebugUnitTest` — 154 tests, `assembleClientDebug`, `lintClientDebug`, `git diff --check`, secret/hardcoded endpoint scans по product/test файлам.
+- Новый commit уже создан и прошёл один независимый read-only review GPT-5.5/xhigh без P0/P1/P2. AI Office карточка `task-20260828-ai-robots-app-roadmap` обновлена, отчёт опубликован в её Mattermost root.
+- Не устанавливать APK, не делать `pm clear`, не трогать телефон, robot, server, relay или worker без отдельного разрешения. Следующий процессный шаг — решить, как вводить локальный branch в Draft PR `#51` и запускать ли внешнюю CI.
+
 ## Самая свежая точка 2026-08-27
 
 - Активная ветка PR — `feature/mobile-triangle-runtime`, Android Draft PR `#51` остаётся Draft/Open. Проверенный code head: `26530d8`.
@@ -129,7 +139,7 @@
 - В iOS `Info.plist` уже добавлены:
   - явные `panel/legal/portal` URL;
   - `GOSHA-` + `Xiaozhi-` SSID prefixes;
-  - `ATS`-исключения для `151.241.228.232:18876` и `192.168.4.1`;
+  - `ATS`-исключения для `TEMP_NL_RELAY_HTTP_HOST` и `192.168.4.1`;
   - `NSLocalNetworkUsageDescription`
 - И уже подтверждён запуск в iOS Simulator:
   - `xcrun simctl install booted .../Гоша.app`

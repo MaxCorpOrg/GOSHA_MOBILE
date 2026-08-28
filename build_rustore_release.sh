@@ -16,10 +16,13 @@ if [[ -f "$KEYSTORE_FILE" ]]; then
 fi
 
 required_vars=(
+  GOSHA_PANEL_BASE_URL
   RUSTORE_KEYSTORE_FILE
   RUSTORE_KEYSTORE_PASSWORD
   RUSTORE_KEY_ALIAS
   RUSTORE_KEY_PASSWORD
+  RUSTORE_PRIVACY_POLICY_URL
+  RUSTORE_TERMS_OF_USE_URL
 )
 
 for name in "${required_vars[@]}"; do
@@ -29,9 +32,19 @@ for name in "${required_vars[@]}"; do
   fi
 done
 
-if [[ -z "${RUSTORE_PRIVACY_POLICY_URL:-}" ]]; then
-  echo "RUSTORE_PRIVACY_POLICY_URL is empty. The APK will still be built, but check the store card before moderation."
-fi
+required_url_vars=(
+  GOSHA_PANEL_BASE_URL
+  RUSTORE_PRIVACY_POLICY_URL
+  RUSTORE_TERMS_OF_USE_URL
+)
+
+for name in "${required_url_vars[@]}"; do
+  value="${!name:-}"
+  if [[ ! "$value" =~ ^https?://[^/[:space:]]+(/[^[:space:]]*)?$ ]]; then
+    echo "$name must be a valid http(s) URL. Fill $KEYSTORE_FILE or export the variable before running."
+    exit 1
+  fi
+done
 
 "$ROOT_DIR/gradlew" --no-daemon clean assembleClientRelease
 

@@ -1113,10 +1113,17 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        val baseUrl = panelBaseUrl()
+        if (!isHttpUrl(baseUrl)) {
+            setStatus(getString(R.string.runtime_status_registration_failed))
+            toast(getString(R.string.activation_panel_url_missing_toast))
+            return
+        }
+
         setStatus(getString(R.string.runtime_status_registering))
         uiScope.launch {
             try {
-                val bundle = PanelApiClient.activateCode(httpClient, panelBaseUrl(), code, ownerName, ownerEmail, ownerPhone)
+                val bundle = PanelApiClient.activateCode(httpClient, baseUrl, code, ownerName, ownerEmail, ownerPhone)
                 currentBundle = bundle
                 saveDraftLocally(bundle)
                 persistDraft(

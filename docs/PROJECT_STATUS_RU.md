@@ -1,5 +1,14 @@
 # PROJECT STATUS
 
+## Контрольная точка 2026-08-28: Android release runtime config hardening
+
+- Рабочая ветка `codex/mobile-runtime-config-hardening-20260828` поверх `61b8d1e` закрывает P1 по release-конфигурации: `release`-сборка и `build_rustore_release.sh` теперь fail-closed без `GOSHA_PANEL_BASE_URL`, `RUSTORE_PRIVACY_POLICY_URL` и `RUSTORE_TERMS_OF_USE_URL`. `fail-closed` здесь значит, что сборка останавливается вместо молчаливого выпуска APK с пустым адресом панели.
+- `debug`-сборка по-прежнему может иметь пустой runtime default для адреса панели. Fresh install и activation теперь понятнее для оператора: если адрес панели не настроен, приложение показывает явную ошибку и не отправляет activation request в пустой endpoint.
+- В примере `keystore.properties.example` больше нет временного публичного endpoint; используются только обезличенные `https://panel.example.test/...`. Тестовые fixtures также переведены на `*.example.test`, чтобы не закреплять `TEMP_NL_RELAY` или реальные IP как production-константы.
+- Локальные проверки уже пройдены последовательно и без устройства: отрицательный и положительный `:app:verifyReleaseRuntimeConfig`, `testClientDebugUnitTest` — 154 tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`; product/test secret и hardcoded endpoint scans — без новых совпадений.
+- Новый commit уже создан и проверен одним независимым read-only reviewer GPT-5.5/xhigh: P0/P1/P2 нет. AI Office карточка `task-20260828-ai-robots-app-roadmap` обновлена, отчёт опубликован в её Mattermost root. APK, телефон, live robot, server, relay, production и физический worker AI Office не изменялись.
+- Следующий шаг перед любым merge/install — решить, как вводить этот локальный branch в Draft PR `#51` и запускать ли внешнюю CI.
+
 ## Контрольная точка 2026-08-27: terminal Android PASS
 
 - Android Draft PR `#51` остаётся Draft/Open; проверенный code head кандидата — `26530d8`.
@@ -154,13 +163,13 @@
 - Выполнен живой прогон приложения на телефоне `TECNO LI9` через `adb`.
 - На живом телефоне подтверждено:
   - установка `app-client-debug.apk`
-  - успешный ввод кода `MJ6SG97A`
+  - успешный ввод обезличенного activation code
   - переход на шаг `Подключение робота к Wi‑Fi`
-  - сохранение нового серверного контура в `shared_prefs/gosha_mobile_prefs.xml`:
-    - `panel_url = http://151.241.228.232:18876`
-    - `hub_url = ws://151.241.228.232:18080/mcp/`
-    - `cloud_endpoint = ws://151.241.228.232:18080/mcp/?token=...&robot_id=gosha-main`
-    - `mobile_websocket_url = ws://151.241.228.232:18080/xiaozhi/v1/`
+  - сохранение нового серверного контура в `shared_prefs/gosha_mobile_prefs.xml`; конкретные live endpoint обезличены, это не переносимые defaults:
+    - `panel_url = TEMP_NL_RELAY_HTTP_URL`
+    - `hub_url = TEMP_NL_RELAY_MCP_URL`
+    - `cloud_endpoint = TEMP_NL_RELAY_MCP_URL_WITH_TOKEN`
+    - `mobile_websocket_url = TEMP_NL_RELAY_VOICE_URL`
     - `robot_id = gosha-main`
     - `robot_wifi_prefixes = GOSHA-,Xiaozhi-`
   - выдача разрешений на местоположение и устройства поблизости
@@ -223,7 +232,7 @@
   - `GoshaRobotPortalURL`
   - `GoshaRobotSSIDPrefixes`
 - Для dev-контура в iOS уже добавлены нужные сетевые разрешения:
-  - `ATS`-исключение для `151.241.228.232:18876`
+  - `ATS`-исключение для `TEMP_NL_RELAY_HTTP_HOST`
   - `ATS`-исключение для `192.168.4.1`
   - `NSLocalNetworkUsageDescription`
 - Для iOS уже подтверждён симуляторный install/launch:

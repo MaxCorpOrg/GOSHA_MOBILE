@@ -21,10 +21,10 @@ cd /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS
 
 - В `GOSHA_MOBILE` добавлен отдельный iOS-каркас:
   - `ios/GoshaMobileIOS`
-- Каркас больше не привязан к старым адресам `8876/8890`.
+- Каркас больше не привязан к старому серверному контуру.
 - `AppConfig` переведён на текущий контур `GOSHA_PLATFORM`:
-  - панель `18876`
-  - `MCP/WebSocket` контур `18080`
+  - панель приходит из runtime `GoshaPanelBaseURL`
+  - `MCP/WebSocket` контур приходит из runtime-пакета подключения
   - локальный портал `http://192.168.4.1`
 - iOS-клиент уже читает:
   - `bundle.mobile_profile`
@@ -59,7 +59,7 @@ xcodebuild -project /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS/Gosh
 
 - В `Info.plist` уже добавлены:
   - явные URL/SSID-ключи runtime-конфига;
-  - `ATS`-исключение для dev-панели `151.241.228.232:18876`;
+  - `ATS`-исключение для dev-панели `TEMP_NL_RELAY_HTTP_HOST`;
   - `ATS`-исключение для локального портала `192.168.4.1`;
   - `NSLocalNetworkUsageDescription`
 - И уже подтверждён запуск приложения в iOS Simulator:

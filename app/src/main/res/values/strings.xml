@@ -333,6 +333,7 @@
     <string name="activation_fill_client_toast">Введите код, имя, почту и телефон</string>
     <string name="activation_consent_toast">Подтвердите согласие на обработку данных перед подключением робота</string>
     <string name="activation_fill_admin_toast">Введите код подключения. Данные клиента можно оставить пустыми.</string>
+    <string name="activation_panel_url_missing_toast">Адрес панели не настроен. Получите пакет подключения или установите сборку с адресом панели.</string>
     <string name="activation_done_toast">Регистрация завершена</string>
     <string name="activation_failed_toast">Не удалось завершить регистрацию: %1$s</string>
 
