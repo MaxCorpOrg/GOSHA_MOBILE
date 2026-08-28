@@ -1,15 +1,26 @@
 package com.maxcorp.gosha.mobile
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.Color
 import android.net.Uri
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
+import android.webkit.WebResourceResponse
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -17,21 +28,35 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONObject
 
 class HotspotPortalActivity : AppCompatActivity() {
     private val logTag = "HotspotPortal"
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var webView: WebView
     private lateinit var tvPortalStatus: TextView
+    private var lastPortalUrl = PORTAL_BASE_URL
     private var reloadAttempts = 0
     private var provisionSubmitted = false
     private var provisionCompleted = false
     private var waitForExitAttempts = 0
     private var submissionExitPollAttempts = 0
+    private val reconnectPolicy = PortalWifiReconnectPolicy()
+    private val reconnectRetryRunnable = Runnable { requestRobotWifiReconnectIfNeeded() }
+    private var wifiStateReceiverRegistered = false
+    private val wifiStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != WifiManager.WIFI_STATE_CHANGED_ACTION) return
+            handleWifiStateChanged(
+                intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN)
+            )
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setResult(Activity.RESULT_CANCELED)
         setContentView(R.layout.activity_hotspot_portal)
 
         tvPortalStatus = findViewById(R.id.tvPortalStatus)
@@ -56,20 +81,43 @@ class HotspotPortalActivity : AppCompatActivity() {
             allowContentAccess = false
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
+            // Some local captive portals serve a broken or reduced page to embedded WebViews.
+            userAgentString = browserLikeUserAgent(userAgentString)
         }
+        // Tecno/Mediatek WebView can render a blank white surface for local captive portals.
+        webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        webView.setBackgroundColor(Color.WHITE)
         webView.addJavascriptInterface(PortalBridge(), "RobotPortalBridge")
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                if (consoleMessage != null) {
+                    Log.d(
+                        logTag,
+                        "Portal console ${consoleMessage.messageLevel()}: ${consoleMessage.message()} @${consoleMessage.lineNumber()}"
+                    )
+                }
+                return super.onConsoleMessage(consoleMessage)
+            }
+        }
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                Log.d(logTag, "Portal page started: $url")
+                super.onPageStarted(view, url, favicon)
+            }
+
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString().orEmpty()
                 if (isAllowedPortalUrl(url)) {
-                    return false
+                    Log.d(logTag, "Intercepted portal navigation to $url")
+                    loadPortalPage(url)
+                    return true
                 }
                 Log.w(logTag, "Blocked unexpected portal navigation: $url")
                 return true
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
+                Log.d(logTag, "Portal page finished: $url")
                 reloadAttempts = 0
                 webView.clearFocus()
                 webView.requestFocus(View.FOCUS_DOWN)
@@ -81,36 +129,74 @@ class HotspotPortalActivity : AppCompatActivity() {
                 }
             }
 
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                val targetUrl = request?.url?.toString().orEmpty()
+                if (targetUrl.isBlank() || !isAllowedPortalUrl(targetUrl)) {
+                    return super.shouldInterceptRequest(view, request)
+                }
+                if (request?.isForMainFrame == true) {
+                    Log.d(logTag, "Portal main-frame request is handled separately: ${request.method} $targetUrl")
+                    return super.shouldInterceptRequest(view, request)
+                }
+                return request?.let(::proxyPortalResource) ?: super.shouldInterceptRequest(view, request)
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?,
+            ) {
+                if (request?.isForMainFrame == true) {
+                    Log.w(
+                        logTag,
+                        "Portal HTTP error: status=${errorResponse?.statusCode} reason=${errorResponse?.reasonPhrase} url=${request.url}"
+                    )
+                }
+                super.onReceivedHttpError(view, request, errorResponse)
+            }
+
             override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
                 error: WebResourceError?,
             ) {
                 if (request?.isForMainFrame == true) {
+                    Log.w(
+                        logTag,
+                        "Portal main-frame error: code=${error?.errorCode} desc=${error?.description} url=${request.url}"
+                    )
                     retryLoad()
                 }
             }
         }
 
-        if (RobotBranding.isRobotWifiSsid(WifiInfoHelper.currentSsid(this), ROBOT_WIFI_PREFIX)) {
-            RobotWifiConnector.bindToCurrentRobotWifi(this)
-        }
         loadPortal(resetAttempts = true)
     }
 
     private fun loadPortal(resetAttempts: Boolean) {
+        if (provisionSubmitted || provisionCompleted) {
+            cancelScheduledReconnectRetry()
+            tvPortalStatus.text = when {
+                provisionCompleted -> getString(R.string.portal_status_done)
+                else -> getString(R.string.portal_status_submitted)
+            }
+            return
+        }
         if (resetAttempts) {
             reloadAttempts = 0
         }
+        lastPortalUrl = PORTAL_BASE_URL
         provisionSubmitted = false
         provisionCompleted = false
         waitForExitAttempts = 0
         submissionExitPollAttempts = 0
+        reconnectPolicy.onLifecycleReset(currentPolicyWifiState())
+        cancelScheduledReconnectRetry()
         tvPortalStatus.text = getString(R.string.portal_status_opening)
         if (RobotBranding.isRobotWifiSsid(WifiInfoHelper.currentSsid(this), ROBOT_WIFI_PREFIX)) {
             RobotWifiConnector.bindToCurrentRobotWifi(this)
         }
-        webView.loadUrl(PORTAL_BASE_URL)
+        loadPortalPage(PORTAL_BASE_URL)
     }
 
     private fun retryLoad() {
@@ -121,7 +207,294 @@ class HotspotPortalActivity : AppCompatActivity() {
         reloadAttempts += 1
         val delayMs = if (reloadAttempts < 2) 700L else 1200L
         tvPortalStatus.text = getString(R.string.portal_status_retry, reloadAttempts)
-        mainHandler.postDelayed({ loadPortal(resetAttempts = false) }, delayMs)
+        mainHandler.postDelayed({ loadPortalPage(lastPortalUrl) }, delayMs)
+    }
+
+    private fun loadPortalPage(targetUrl: String) {
+        lastPortalUrl = targetUrl
+        if (!ensureRobotNetworkForPortal()) {
+            return
+        }
+        tvPortalStatus.text = when {
+            provisionCompleted -> getString(R.string.portal_status_done)
+            provisionSubmitted -> getString(R.string.portal_status_submitted)
+            else -> getString(R.string.portal_status_opening)
+        }
+        Log.d(logTag, "Loading portal page through RobotPortalClient: $targetUrl")
+        Thread {
+            val result = runCatching { RobotPortalClient.fetch(this, targetUrl) }
+            runOnUiThread {
+                if (isDestroyed || isFinishing) {
+                    return@runOnUiThread
+                }
+                result.onSuccess { response ->
+                    Log.d(
+                        logTag,
+                        "Portal response: request=$targetUrl resolved=${response.url} code=${response.code} type=${response.contentType} bytes=${response.bodyBytes.size}"
+                    )
+                    val body = response.bodyText()
+                    if (response.code !in 200..299 || body.isBlank()) {
+                        if (!requestRobotWifiReconnectIfNeeded()) {
+                            retryLoad()
+                        }
+                        return@onSuccess
+                    }
+                    lastPortalUrl = response.url
+                    webView.loadDataWithBaseURL(
+                        response.url,
+                        preparePortalHtml(body),
+                        resolveMimeType(response.contentType),
+                        resolveEncoding(response.contentType),
+                        response.url,
+                    )
+                }.onFailure { error ->
+                    Log.w(logTag, "Failed to load portal page $targetUrl: ${error.message}", error)
+                    if (!requestRobotWifiReconnectIfNeeded()) {
+                        retryLoad()
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun ensureRobotNetworkForPortal(): Boolean {
+        if (hasRobotNetworkForPortal()) {
+            reconnectPolicy.onAvailable()
+            cancelScheduledReconnectRetry()
+            return true
+        }
+        requestRobotWifiReconnectIfNeeded()
+        return false
+    }
+
+    private fun hasRobotNetworkForPortal(): Boolean {
+        val currentSsid = WifiInfoHelper.currentSsid(this)
+        if (RobotBranding.isRobotWifiSsid(currentSsid, ROBOT_WIFI_PREFIX)) {
+            if (RobotWifiConnector.bindToCurrentRobotWifi(this)) {
+                return true
+            }
+        }
+        return RobotWifiConnector.preferredRobotWifiNetwork(this) != null
+    }
+
+    private fun requestRobotWifiReconnectIfNeeded(): Boolean {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { requestRobotWifiReconnectIfNeeded() }
+            return true
+        }
+        if (
+            isFinishing ||
+            isDestroyed ||
+            !ProvisionCoordinator.shouldReconnectPortalWifi(
+                portalSubmitted = provisionSubmitted,
+                portalCompleted = provisionCompleted,
+            )
+        ) {
+            reconnectPolicy.onRequestNotStarted()
+            cancelScheduledReconnectRetry()
+            return false
+        }
+        if (hasRobotNetworkForPortal()) {
+            reconnectPolicy.onAvailable()
+            cancelScheduledReconnectRetry()
+            return false
+        }
+
+        val wifiState = currentPolicyWifiState()
+        val decision = reconnectPolicy.requestNeeded(nowMs = elapsedNowMs(), wifiState = wifiState)
+        if (decision.action == PortalWifiReconnectPolicy.Action.StartRequest &&
+            !RobotWifiConnector.hasRequiredPermissions(this)
+        ) {
+            reconnectPolicy.onRequestNotStarted()
+            cancelScheduledReconnectRetry()
+            tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
+            return true
+        }
+        return handleReconnectDecision(decision)
+    }
+
+    private fun handleReconnectDecision(decision: PortalWifiReconnectPolicy.Decision): Boolean {
+        return when (decision.action) {
+            PortalWifiReconnectPolicy.Action.StartRequest -> {
+                startRobotWifiReconnectRequest()
+                true
+            }
+            PortalWifiReconnectPolicy.Action.CoalesceActiveRequest -> {
+                tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
+                true
+            }
+            PortalWifiReconnectPolicy.Action.WaitForWifiEnabled -> {
+                cancelScheduledReconnectRetry()
+                tvPortalStatus.text = getString(R.string.portal_status_wifi_disabled)
+                true
+            }
+            PortalWifiReconnectPolicy.Action.WaitForCooldown -> {
+                scheduleReconnectRetry(decision.retryDelayMs)
+                tvPortalStatus.text = getString(
+                    R.string.portal_status_reconnect_cooldown,
+                    reconnectRetryDelaySeconds(decision.retryDelayMs),
+                )
+                true
+            }
+            PortalWifiReconnectPolicy.Action.BlockedAfterPortalFinished -> {
+                cancelScheduledReconnectRetry()
+                false
+            }
+        }
+    }
+
+    private fun startRobotWifiReconnectRequest() {
+        if (!RobotWifiConnector.hasRequiredPermissions(this)) {
+            reconnectPolicy.onRequestNotStarted()
+            cancelScheduledReconnectRetry()
+            tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
+            return
+        }
+
+        cancelScheduledReconnectRetry()
+        tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
+        RobotWifiConnector.connect(
+            context = this,
+            onConnected = {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        return@runOnUiThread
+                    }
+                    reconnectPolicy.onAvailable()
+                    cancelScheduledReconnectRetry()
+                    tvPortalStatus.text = getString(R.string.portal_status_reconnected)
+                    loadPortalPage(lastPortalUrl)
+                }
+            },
+            onError = { message ->
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        return@runOnUiThread
+                    }
+                    Log.w(logTag, "Robot Wi-Fi reconnect request failed: $message")
+                    val retryDecision = reconnectPolicy.onUnavailable(
+                        nowMs = elapsedNowMs(),
+                        wifiState = currentPolicyWifiState(),
+                    )
+                    if (retryDecision.action == PortalWifiReconnectPolicy.Action.WaitForCooldown) {
+                        handleReconnectDecision(retryDecision)
+                    } else if (retryDecision.action == PortalWifiReconnectPolicy.Action.WaitForWifiEnabled) {
+                        handleReconnectDecision(retryDecision)
+                    } else {
+                        tvPortalStatus.text = getString(R.string.portal_status_reconnect_failed)
+                    }
+                }
+            },
+            onLost = {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        return@runOnUiThread
+                    }
+                    reconnectPolicy.onLost(
+                        nowMs = elapsedNowMs(),
+                        wifiState = currentPolicyWifiState(),
+                    )
+                    tvPortalStatus.text = getString(R.string.portal_status_reconnecting_wifi)
+                    requestRobotWifiReconnectIfNeeded()
+                }
+            },
+        )
+    }
+
+    private fun currentPolicyWifiState(): PortalWifiReconnectPolicy.WifiState {
+        return when (WifiInfoHelper.systemWifiState(this)) {
+            WifiInfoHelper.SystemWifiState.Enabled -> PortalWifiReconnectPolicy.WifiState.Enabled
+            WifiInfoHelper.SystemWifiState.Enabling -> PortalWifiReconnectPolicy.WifiState.Enabling
+            WifiInfoHelper.SystemWifiState.Disabled -> PortalWifiReconnectPolicy.WifiState.Disabled
+            WifiInfoHelper.SystemWifiState.Disabling -> PortalWifiReconnectPolicy.WifiState.Disabling
+            WifiInfoHelper.SystemWifiState.Unknown -> PortalWifiReconnectPolicy.WifiState.Unknown
+        }
+    }
+
+    private fun elapsedNowMs(): Long = SystemClock.elapsedRealtime()
+
+    private fun scheduleReconnectRetry(delayMs: Long) {
+        val safeDelayMs = delayMs.coerceAtLeast(MIN_RECONNECT_RETRY_DELAY_MS)
+        mainHandler.removeCallbacks(reconnectRetryRunnable)
+        mainHandler.postDelayed(reconnectRetryRunnable, safeDelayMs)
+    }
+
+    private fun cancelScheduledReconnectRetry() {
+        mainHandler.removeCallbacks(reconnectRetryRunnable)
+    }
+
+    private fun reconnectRetryDelaySeconds(delayMs: Long): Long {
+        return ((delayMs + 999L) / 1000L).coerceAtLeast(1L)
+    }
+
+    private fun registerWifiStateReceiver() {
+        if (wifiStateReceiverRegistered) return
+        val filter = IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(wifiStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(wifiStateReceiver, filter)
+        }
+        wifiStateReceiverRegistered = true
+    }
+
+    private fun unregisterWifiStateReceiver() {
+        if (!wifiStateReceiverRegistered) return
+        runCatching { unregisterReceiver(wifiStateReceiver) }
+        wifiStateReceiverRegistered = false
+    }
+
+    private fun handleWifiStateChanged(wifiState: Int) {
+        if (isFinishing || isDestroyed) return
+        when (wifiState) {
+            WifiManager.WIFI_STATE_ENABLED -> {
+                reconnectPolicy.onWifiEnabled(elapsedNowMs())
+                if (ProvisionCoordinator.shouldReconnectPortalWifi(provisionSubmitted, provisionCompleted)) {
+                    requestRobotWifiReconnectIfNeeded()
+                }
+            }
+            WifiManager.WIFI_STATE_ENABLING -> {
+                cancelScheduledReconnectRetry()
+                if (ProvisionCoordinator.shouldReconnectPortalWifi(provisionSubmitted, provisionCompleted)) {
+                    tvPortalStatus.text = getString(R.string.portal_status_wifi_enabling)
+                }
+            }
+            WifiManager.WIFI_STATE_DISABLED,
+            WifiManager.WIFI_STATE_DISABLING -> {
+                reconnectPolicy.onWifiDisabled()
+                cancelScheduledReconnectRetry()
+                if (ProvisionCoordinator.shouldReconnectPortalWifi(provisionSubmitted, provisionCompleted)) {
+                    tvPortalStatus.text = getString(R.string.portal_status_wifi_disabled)
+                }
+            }
+        }
+    }
+
+    private fun proxyPortalResource(request: WebResourceRequest): WebResourceResponse? {
+        return try {
+            val response = RobotPortalClient.request(
+                context = this,
+                target = request.url.toString(),
+                method = request.method,
+            )
+            Log.d(
+                logTag,
+                "Proxy portal resource: method=${request.method} url=${request.url} code=${response.code} type=${response.contentType} bytes=${response.bodyBytes.size}"
+            )
+            WebResourceResponse(
+                resolveMimeType(response.contentType),
+                resolveEncoding(response.contentType),
+                response.code,
+                httpReason(response.code),
+                responseHeaders(response.contentType),
+                response.bodyStream(),
+            )
+        } catch (error: Exception) {
+            Log.w(logTag, "Failed to proxy portal resource ${request.url}: ${error.message}", error)
+            requestRobotWifiReconnectIfNeeded()
+            null
+        }
     }
 
     private fun injectRussianHelpers() {
@@ -194,6 +567,8 @@ class HotspotPortalActivity : AppCompatActivity() {
                 const markers = [
                   'Device will restart in',
                   '设备将在',
+                  '配置成功',
+                  'Configuration successful',
                   'Настройки сохранены',
                   'Подключение выполнено',
                   'Rebooting'
@@ -232,6 +607,172 @@ class HotspotPortalActivity : AppCompatActivity() {
             })();
         """.trimIndent()
         webView.evaluateJavascript(js, null)
+    }
+
+    private fun preparePortalHtml(originalHtml: String): String {
+        val bridgeScript = buildPortalFetchBridgeScript()
+        return when {
+            originalHtml.contains("</head>", ignoreCase = true) ->
+                originalHtml.replace("</head>", "$bridgeScript\n</head>", ignoreCase = true)
+            originalHtml.contains("<body", ignoreCase = true) ->
+                "$bridgeScript\n$originalHtml"
+            else -> "$bridgeScript\n$originalHtml"
+        }
+    }
+
+    private fun buildPortalFetchBridgeScript(): String {
+        return """
+            <script>
+            (function() {
+              if (window.__maxcorpPortalFetchInstalled) return;
+              window.__maxcorpPortalFetchInstalled = true;
+              const originalFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+
+              function normalizeUrl(input) {
+                if (!input) return '';
+                if (input.startsWith('http://') || input.startsWith('https://')) return input;
+                if (input.startsWith('/')) return '${PORTAL_BASE_URL}' + input;
+                return '${PORTAL_BASE_URL}/' + input;
+              }
+
+              function isPortalUrl(input) {
+                if (!input) return false;
+                return input.startsWith('${PORTAL_BASE_URL}') || input.startsWith('http://robot.local') || input.startsWith('/');
+              }
+
+              function makeResponse(payload) {
+                const status = Number(payload.code || 0);
+                const body = typeof payload.body === 'string' ? payload.body : '';
+                const contentType = typeof payload.contentType === 'string' ? payload.contentType : '';
+                return {
+                  ok: status >= 200 && status < 300,
+                  status: status,
+                  url: payload.url || '',
+                  text: async function() {
+                    return body;
+                  },
+                  json: async function() {
+                    if (!body) return {};
+                    try {
+                      return JSON.parse(body);
+                    } catch (error) {
+                      return {
+                        rawText: body,
+                        invalidJson: true,
+                        contentType: contentType
+                      };
+                    }
+                  }
+                };
+              }
+
+              function normalizeRequestBody(body) {
+                if (body == null) return '';
+                if (typeof body === 'string') return body;
+                if (body instanceof URLSearchParams) return body.toString();
+                if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                  const formData = new URLSearchParams();
+                  body.forEach((value, key) => {
+                    formData.append(key, typeof value === 'string' ? value : '');
+                  });
+                  return formData.toString();
+                }
+                if (typeof body === 'object') {
+                  try {
+                    return JSON.stringify(body);
+                  } catch (error) {
+                    return '';
+                  }
+                }
+                return String(body);
+              }
+
+              window.fetch = function(input, init) {
+                const rawUrl = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                if (!isPortalUrl(rawUrl) || !window.RobotPortalBridge || !window.RobotPortalBridge.performPortalRequest) {
+                  if (originalFetch) {
+                    return originalFetch(input, init);
+                  }
+                  return Promise.reject(new Error('Fetch unavailable'));
+                }
+
+                const method = ((init && init.method) || 'GET').toUpperCase();
+                const body = normalizeRequestBody(init && init.body);
+                let contentType = '';
+                if (init && init.headers) {
+                  if (typeof init.headers.get === 'function') {
+                    contentType = init.headers.get('Content-Type') || '';
+                  } else {
+                    contentType = init.headers['Content-Type'] || init.headers['content-type'] || '';
+                  }
+                }
+                if (!contentType && init && init.body instanceof URLSearchParams) {
+                  contentType = 'application/x-www-form-urlencoded;charset=UTF-8';
+                }
+
+                try {
+                  const payloadText = window.RobotPortalBridge.performPortalRequest(
+                    normalizeUrl(rawUrl),
+                    method,
+                    body,
+                    contentType
+                  );
+                  const payload = JSON.parse(payloadText || '{}');
+                  if (!payload.success) {
+                    throw new Error(payload.error || 'Portal request failed');
+                  }
+                  return Promise.resolve(makeResponse(payload));
+                } catch (error) {
+                  const message = error && error.message ? error.message : String(error);
+                  return Promise.reject(new Error(message));
+                }
+              };
+            })();
+            </script>
+        """.trimIndent()
+    }
+
+    private fun resolveMimeType(contentType: String): String {
+        val normalized = contentType.substringBefore(';').trim()
+        return if (normalized.isBlank()) {
+            "text/html"
+        } else {
+            normalized
+        }
+    }
+
+    private fun resolveEncoding(contentType: String): String {
+        return contentType
+            .split(';')
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("charset=", ignoreCase = true) }
+            ?.substringAfter('=')
+            ?.ifBlank { null }
+            ?: "utf-8"
+    }
+
+    private fun responseHeaders(contentType: String): MutableMap<String, String> {
+        return linkedMapOf<String, String>().apply {
+            if (contentType.isNotBlank()) {
+                put("Content-Type", contentType)
+            }
+            put("Cache-Control", "no-store")
+        }
+    }
+
+    private fun httpReason(code: Int): String {
+        return when (code) {
+            200 -> "OK"
+            204 -> "No Content"
+            301 -> "Moved Permanently"
+            302 -> "Found"
+            400 -> "Bad Request"
+            401 -> "Unauthorized"
+            403 -> "Forbidden"
+            404 -> "Not Found"
+            500 -> "Internal Server Error"
+            else -> "HTTP $code"
+        }
     }
 
     private fun waitForRobotNetworkExit() {
@@ -303,9 +844,92 @@ class HotspotPortalActivity : AppCompatActivity() {
 
     private inner class PortalBridge {
         @JavascriptInterface
+        fun performPortalRequest(
+            url: String,
+            method: String,
+            body: String?,
+            contentType: String?,
+        ): String {
+            return try {
+                Log.d(
+                    logTag,
+                    "Portal bridge request: method=$method url=$url contentType=${contentType.orEmpty()} bodyLength=${body?.length ?: 0}"
+                )
+                val response = RobotPortalClient.request(
+                    context = this@HotspotPortalActivity,
+                    target = url,
+                    method = method,
+                    body = body?.toByteArray(Charsets.UTF_8),
+                    contentType = contentType,
+                )
+                JSONObject()
+                    .put("success", true)
+                    .put("url", response.url)
+                    .put("code", response.code)
+                    .put("contentType", response.contentType)
+                    .put("body", response.bodyText())
+                    .toString()
+            } catch (error: Exception) {
+                Log.w(logTag, "Portal bridge request failed for $method $url: ${error.message}", error)
+                requestRobotWifiReconnectIfNeeded()
+                JSONObject()
+                    .put("success", false)
+                    .put("error", error.message ?: "unknown error")
+                    .toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun submitPortalForm(
+            url: String,
+            method: String,
+            body: String?,
+            contentType: String?,
+        ) {
+            Thread {
+                val result = runCatching {
+                    RobotPortalClient.request(
+                        context = this@HotspotPortalActivity,
+                        target = url,
+                        method = method,
+                        body = body?.toByteArray(Charsets.UTF_8),
+                        contentType = contentType,
+                    )
+                }
+                runOnUiThread {
+                    if (isDestroyed || isFinishing) {
+                        return@runOnUiThread
+                    }
+                    result.onSuccess { response ->
+                        Log.d(
+                            logTag,
+                            "Portal form response: method=$method url=$url resolved=${response.url} code=${response.code} type=${response.contentType} bytes=${response.bodyBytes.size}"
+                        )
+                        lastPortalUrl = response.url
+                        webView.loadDataWithBaseURL(
+                            response.url,
+                            preparePortalHtml(response.bodyText()),
+                            resolveMimeType(response.contentType),
+                            resolveEncoding(response.contentType),
+                            response.url,
+                        )
+                    }.onFailure { error ->
+                        Log.w(logTag, "Portal form submit failed for $method $url: ${error.message}", error)
+                        if (!requestRobotWifiReconnectIfNeeded()) {
+                            tvPortalStatus.text = getString(R.string.portal_status_error)
+                        }
+                    }
+                }
+            }.start()
+        }
+
+        @JavascriptInterface
         fun onProvisionSubmitted() {
             runOnUiThread {
                 provisionSubmitted = true
+                reconnectPolicy.onPortalSubmitted()
+                cancelScheduledReconnectRetry()
+                setResult(Activity.RESULT_OK)
                 tvPortalStatus.text = getString(R.string.portal_status_submitted)
                 scheduleSubmittedExitPoll(resetAttempts = true)
             }
@@ -317,6 +941,9 @@ class HotspotPortalActivity : AppCompatActivity() {
                 if (provisionCompleted) return@runOnUiThread
                 provisionCompleted = true
                 provisionSubmitted = true
+                reconnectPolicy.onPortalCompleted()
+                cancelScheduledReconnectRetry()
+                setResult(Activity.RESULT_OK)
                 mainHandler.removeCallbacks(submittedExitPollRunnable)
                 tvPortalStatus.text = getString(R.string.portal_status_wait_reboot)
                 waitForExitAttempts = 0
@@ -331,18 +958,45 @@ class HotspotPortalActivity : AppCompatActivity() {
         }
     }
 
-    override fun onDestroy() {
-        mainHandler.removeCallbacksAndMessages(null)
-        RobotWifiConnector.release()
-        webView.destroy()
-        super.onDestroy()
+    override fun onStart() {
+        super.onStart()
+        registerWifiStateReceiver()
+    }
+
+    override fun onStop() {
+        cancelScheduledReconnectRetry()
+        unregisterWifiStateReceiver()
+        super.onStop()
     }
 
     override fun onResume() {
         super.onResume()
         if (provisionSubmitted && !provisionCompleted) {
             scheduleSubmittedExitPoll()
+            return
         }
+        if (provisionCompleted) {
+            return
+        }
+
+        when (reconnectPolicy.reconcileOnResume(elapsedNowMs(), currentPolicyWifiState()).action) {
+            PortalWifiReconnectPolicy.ResumeAction.RequestReconnectIfNeeded ->
+                requestRobotWifiReconnectIfNeeded()
+            PortalWifiReconnectPolicy.ResumeAction.ShowWifiBlocked -> {
+                cancelScheduledReconnectRetry()
+                tvPortalStatus.text = getString(R.string.portal_status_wifi_disabled)
+            }
+            PortalWifiReconnectPolicy.ResumeAction.IgnoreAfterPortalFinished ->
+                cancelScheduledReconnectRetry()
+        }
+    }
+
+    override fun onDestroy() {
+        unregisterWifiStateReceiver()
+        mainHandler.removeCallbacksAndMessages(null)
+        RobotWifiConnector.release()
+        webView.destroy()
+        super.onDestroy()
     }
 
     companion object {
@@ -350,12 +1004,21 @@ class HotspotPortalActivity : AppCompatActivity() {
         private const val PORTAL_HOST = "192.168.4.1"
         private const val PORTAL_ALIAS_HOST = "robot.local"
         private const val ROBOT_WIFI_PREFIX = RobotBranding.PRIMARY_WIFI_PREFIX
-        private const val SUCCESS_SETTLE_DELAY_MS = 6500L
+        private const val SUCCESS_SETTLE_DELAY_MS = 3000L
         private const val WAIT_FOR_EXIT_INTERVAL_MS = 1000L
         private const val WAIT_FOR_EXIT_MAX_ATTEMPTS = 30
         private const val RETURN_TIMEOUT_FINISH_DELAY_MS = 1800L
         private const val SUBMITTED_EXIT_POLL_INTERVAL_MS = 1000L
         private const val SUBMITTED_EXIT_POLL_MAX_ATTEMPTS = 45
+        private const val MIN_RECONNECT_RETRY_DELAY_MS = 500L
+    }
+
+    private fun browserLikeUserAgent(original: String): String {
+        return original
+            .replace("; wv", "")
+            .replace("Version/4.0 ", "")
+            .replace(" wv)", ")")
+            .trim()
     }
 
     private fun isAllowedPortalUrl(url: String): Boolean {

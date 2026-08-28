@@ -21,10 +21,38 @@ internal sealed interface ProvisionAttemptPlan {
     ) : ProvisionAttemptPlan
 }
 
+internal sealed interface ProvisionPanelSignalPlan {
+    data class CompleteWithLocalHost(
+        val localHost: String,
+    ) : ProvisionPanelSignalPlan
+
+    data class ContinueLocalDiscovery(
+        val localHostHint: String,
+    ) : ProvisionPanelSignalPlan
+
+    object NoPanelSignal : ProvisionPanelSignalPlan
+}
+
 internal object ProvisionCoordinator {
     private val noSubnetPanelCheckIndices = setOf(5, 11, 17)
     private val earlySettlePanelCheckIndices = setOf(0, 2, 4)
     private val discoveryPanelCheckIndices = setOf(9, 17, 25)
+
+    fun shouldStartReturnCheck(
+        awaitingRobotProvision: Boolean,
+        robotWifiPortalActive: Boolean,
+        returnCheckRunning: Boolean,
+        portalSubmitted: Boolean = true,
+    ): Boolean {
+        return awaitingRobotProvision && portalSubmitted && !robotWifiPortalActive && !returnCheckRunning
+    }
+
+    fun shouldReconnectPortalWifi(
+        portalSubmitted: Boolean,
+        portalCompleted: Boolean,
+    ): Boolean {
+        return !portalSubmitted && !portalCompleted
+    }
 
     fun planAttempt(
         index: Int,
@@ -59,5 +87,23 @@ internal object ProvisionCoordinator {
             displayTotal = totalAttempts - settleAttempts,
             shouldCheckPanelAfterDiscovery = index in discoveryPanelCheckIndices,
         )
+    }
+
+    fun planPanelSignal(decision: RobotConnectivityDecision): ProvisionPanelSignalPlan {
+        return when (decision.type) {
+            RobotConnectivityDecisionType.CONNECTED_LOCALLY -> {
+                val localHost = decision.localHost.trim()
+                if (localHost.isNotBlank()) {
+                    ProvisionPanelSignalPlan.CompleteWithLocalHost(localHost)
+                } else {
+                    ProvisionPanelSignalPlan.NoPanelSignal
+                }
+            }
+
+            RobotConnectivityDecisionType.CONNECTED_VIA_PANEL ->
+                ProvisionPanelSignalPlan.ContinueLocalDiscovery(decision.localHostHint.trim())
+
+            else -> ProvisionPanelSignalPlan.NoPanelSignal
+        }
     }
 }

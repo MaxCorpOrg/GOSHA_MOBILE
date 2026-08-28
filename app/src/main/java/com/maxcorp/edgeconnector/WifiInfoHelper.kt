@@ -7,6 +7,7 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.wifi.SupplicantState
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -17,6 +18,14 @@ import java.net.Inet4Address
 object WifiInfoHelper {
     private const val DEFAULT_SCAN_MAX_AGE_MS = 15_000L
 
+    enum class SystemWifiState {
+        Enabled,
+        Enabling,
+        Disabled,
+        Disabling,
+        Unknown,
+    }
+
     @Suppress("DEPRECATION")
     @SuppressLint("MissingPermission")
     fun currentSsid(context: Context): String {
@@ -25,11 +34,10 @@ object WifiInfoHelper {
             ?: return ""
 
         val activeWifi = manager?.let(::findWifiNetwork)
-        if (activeWifi == null) {
-            return ""
-        }
+        val connectionInfo = wifiManager.connectionInfo
+        val associationCompleted = connectionInfo?.supplicantState == SupplicantState.COMPLETED
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (activeWifi != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val capabilities = manager.getNetworkCapabilities(activeWifi)
             val transportInfo = capabilities?.transportInfo as? WifiInfo
             val ssid = transportInfo?.ssid.orEmpty().trim()
@@ -38,7 +46,11 @@ object WifiInfoHelper {
             }
         }
 
-        val raw = wifiManager.connectionInfo?.ssid.orEmpty().trim()
+        if (activeWifi == null && !associationCompleted) {
+            return ""
+        }
+
+        val raw = connectionInfo?.ssid.orEmpty().trim()
         if (raw.isBlank() || raw == "<unknown ssid>") return ""
         return raw.removePrefix("\"").removeSuffix("\"")
     }
@@ -56,6 +68,11 @@ object WifiInfoHelper {
             if (prefix.isNotBlank()) {
                 return prefix
             }
+        }
+
+        // Не используем старый адрес из WifiManager, если Android уже не считает Wi‑Fi активной сетью.
+        if (currentSsid(context).isBlank()) {
+            return ""
         }
 
         val ip = wifiManager.connectionInfo?.ipAddress ?: 0
@@ -93,6 +110,19 @@ object WifiInfoHelper {
         nearbySsidByPrefixes(context, listOf(prefix), maxAgeMs)
 
     @Suppress("DEPRECATION")
+    fun systemWifiState(context: Context): SystemWifiState {
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            ?: return SystemWifiState.Unknown
+        return when (wifiManager.wifiState) {
+            WifiManager.WIFI_STATE_ENABLED -> SystemWifiState.Enabled
+            WifiManager.WIFI_STATE_ENABLING -> SystemWifiState.Enabling
+            WifiManager.WIFI_STATE_DISABLED -> SystemWifiState.Disabled
+            WifiManager.WIFI_STATE_DISABLING -> SystemWifiState.Disabling
+            else -> SystemWifiState.Unknown
+        }
+    }
+
+    @Suppress("DEPRECATION")
     @SuppressLint("MissingPermission")
     fun nearbySsidByPrefixesAnyAge(context: Context, prefixes: List<String>): String {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
@@ -112,6 +142,12 @@ object WifiInfoHelper {
 
     fun nearbySsidByPrefixAnyAge(context: Context, prefix: String): String =
         nearbySsidByPrefixesAnyAge(context, listOf(prefix))
+
+    fun currentWifiNetwork(context: Context): Network? {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return null
+        return findWifiNetwork(manager)
+    }
 
     @Suppress("DEPRECATION")
     @SuppressLint("MissingPermission")
@@ -137,11 +173,11 @@ object WifiInfoHelper {
 
     private fun findWifiNetwork(manager: ConnectivityManager): Network? {
         val active = manager.activeNetwork
-        if (active != null && manager.getNetworkCapabilities(active)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
-            return active
-        }
-        return manager.allNetworks.firstOrNull { network ->
-            manager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        return chooseWifiNetworkForPolicy(
+            activeNetwork = active,
+            allNetworks = manager.allNetworks.toList(),
+        ) { network ->
+            manager.getNetworkCapabilities(network).toTransportFlags()
         }
     }
 
@@ -155,5 +191,35 @@ object WifiInfoHelper {
         val parts = ipv4.split('.')
         if (parts.size < 3) return ""
         return parts.take(3).joinToString(".")
+    }
+
+    internal data class NetworkTransportFlags(
+        val hasWifi: Boolean,
+        val hasVpn: Boolean,
+    )
+
+    internal fun <T> chooseWifiNetworkForPolicy(
+        activeNetwork: T?,
+        allNetworks: List<T>,
+        flagsFor: (T) -> NetworkTransportFlags?,
+    ): T? {
+        if (activeNetwork != null && flagsFor(activeNetwork).isUsableWifiNetwork()) {
+            return activeNetwork
+        }
+        return allNetworks.firstOrNull { network ->
+            flagsFor(network).isUsableWifiNetwork()
+        }
+    }
+
+    private fun NetworkCapabilities?.toTransportFlags(): NetworkTransportFlags? {
+        if (this == null) return null
+        return NetworkTransportFlags(
+            hasWifi = hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+            hasVpn = hasTransport(NetworkCapabilities.TRANSPORT_VPN),
+        )
+    }
+
+    private fun NetworkTransportFlags?.isUsableWifiNetwork(): Boolean {
+        return this != null && hasWifi && !hasVpn
     }
 }

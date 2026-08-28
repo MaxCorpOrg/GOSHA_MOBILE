@@ -2,6 +2,7 @@ package com.maxcorp.gosha.mobile
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -12,6 +13,11 @@ import java.io.IOException
 import java.net.URI
 
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+
+internal class PanelHttpException(
+    val statusCode: Int,
+    message: String,
+) : IOException(message)
 
 data class PlanOption(
     val code: String,
@@ -34,11 +40,13 @@ data class RobotUser(
 
 data class RobotRuntimeSnapshot(
     val robotId: String,
+    val deviceId: String,
     val connected: Boolean,
     val mode: String,
     val transportState: String,
     val target: String,
     val localHost: String,
+    val localHostHint: String,
     val connectivityEvidence: String,
     val verifiedNow: Boolean,
     val freshDeviceContact: Boolean,
@@ -47,8 +55,22 @@ data class RobotRuntimeSnapshot(
     val appVersion: String,
 )
 
+enum class MobilePresenceState(val wireValue: String, val acceptsLocalHost: Boolean = false) {
+    HOME_WIFI_LOCAL("home_wifi_local", acceptsLocalHost = true),
+    PHONE_ON_ROBOT_WIFI("phone_on_robot_wifi"),
+    ROBOT_HOTSPOT_VISIBLE("robot_hotspot_visible"),
+    NOT_FOUND("not_found"),
+}
+
+data class MobilePresencePayload(
+    val state: String,
+    val source: String,
+    val localHost: String = "",
+)
+
 data class SelfhostXiaozhiBundle(
     val provider: String,
+    val deviceId: String,
     val otaUrl: String,
     val activateUrl: String,
     val websocketUrl: String,
@@ -68,6 +90,7 @@ data class MobileProfile(
 data class OnboardingBundle(
     val code: String,
     val panelUrl: String,
+    val edgeHubUrl: String,
     val panelClientToken: String,
     val robotId: String,
     val robotName: String,
@@ -146,7 +169,7 @@ object PanelApiClient {
             throw IOException(root.optString("error", "Не удалось обработать код"))
         }
         val bundle = root.optJSONObject("bundle") ?: JSONObject()
-        bundle.toOnboardingBundle()
+        parseOnboardingBundle(bundle)
     }
 
     suspend fun activateCode(
@@ -175,7 +198,7 @@ object PanelApiClient {
             throw IOException(root.optString("error", "Не удалось активировать код"))
         }
         val bundle = root.optJSONObject("bundle") ?: JSONObject()
-        bundle.toOnboardingBundle()
+        parseOnboardingBundle(bundle)
     }
 
     suspend fun fetchPlans(http: OkHttpClient, baseUrl: String): List<PlanOption> = withContext(Dispatchers.IO) {
@@ -412,6 +435,112 @@ object PanelApiClient {
         parseRobotRuntimeSnapshot(item, robotId)
     }
 
+    suspend fun updateMobilePresence(
+        http: OkHttpClient,
+        baseUrl: String,
+        robotId: String,
+        state: MobilePresenceState,
+        localHost: String = "",
+        panelClientToken: String = "",
+        onboardingCode: String = "",
+        sourceId: String = "",
+        instanceId: String = "",
+        appVersion: String = "",
+    ): JSONObject = withContext(Dispatchers.IO) {
+        executeUpdateMobilePresenceCall(
+            buildUpdateMobilePresenceCall(
+                http = http,
+                baseUrl = baseUrl,
+                robotId = robotId,
+                state = state,
+                localHost = localHost,
+                panelClientToken = panelClientToken,
+                onboardingCode = onboardingCode,
+                sourceId = sourceId,
+                instanceId = instanceId,
+                appVersion = appVersion,
+            )
+        )
+    }
+
+    fun buildUpdateMobilePresenceCall(
+        http: OkHttpClient,
+        baseUrl: String,
+        robotId: String,
+        state: MobilePresenceState,
+        localHost: String = "",
+        panelClientToken: String = "",
+        onboardingCode: String = "",
+        sourceId: String = "",
+        instanceId: String = "",
+        appVersion: String = "",
+    ): Call {
+        return newJsonCall(
+            http,
+            normalizeBaseUrl(baseUrl) + "/api/mobile/robots/${robotId}/presence",
+            "POST",
+            buildMobilePresencePayload(state, localHost).apply {
+                if (sourceId.isNotBlank()) put("source_id", sourceId)
+                if (instanceId.isNotBlank()) put("instance_id", instanceId)
+                if (appVersion.isNotBlank()) put("app_version", appVersion)
+            },
+            mobileHeaders(panelClientToken, onboardingCode),
+        )
+    }
+
+    fun executeUpdateMobilePresenceCall(call: Call): JSONObject {
+        val root = executeJson(call)
+        if (!root.optBoolean("ok", false)) {
+            throw IOException(root.optString("error", "Не удалось передать локальный статус робота"))
+        }
+        return root.optJSONObject("snapshot") ?: JSONObject()
+    }
+
+    suspend fun publishRuntimeEvent(
+        http: OkHttpClient,
+        baseUrl: String,
+        robotId: String,
+        event: JSONObject,
+        panelClientToken: String = "",
+        onboardingCode: String = "",
+    ): JSONObject = withContext(Dispatchers.IO) {
+        executePublishRuntimeEventCall(
+            buildPublishRuntimeEventCall(
+                http = http,
+                baseUrl = baseUrl,
+                robotId = robotId,
+                event = event,
+                panelClientToken = panelClientToken,
+                onboardingCode = onboardingCode,
+            )
+        )
+    }
+
+    fun buildPublishRuntimeEventCall(
+        http: OkHttpClient,
+        baseUrl: String,
+        robotId: String,
+        event: JSONObject,
+        panelClientToken: String = "",
+        onboardingCode: String = "",
+    ): Call {
+        return newJsonCall(
+            http,
+            normalizeBaseUrl(baseUrl) + "/api/mobile/robots/${robotId}/events",
+            "POST",
+            event,
+            mobileHeaders(panelClientToken, onboardingCode),
+        )
+    }
+
+    fun executePublishRuntimeEventCall(call: Call): JSONObject {
+        val root = executeJson(call)
+        if (!root.optBoolean("ok", false)) {
+            throw IOException(root.optString("error", "Не удалось передать событие состояния"))
+        }
+        return root
+    }
+
     internal fun parseRobotRuntimeSnapshot(item: JSONObject, robotId: String): RobotRuntimeSnapshot {
         val diagnostics = item.optJSONObject("diagnostics") ?: JSONObject()
         val control = item.optJSONObject("control") ?: JSONObject()
@@ -428,14 +557,17 @@ object PanelApiClient {
             connectivityHasConnected = connectivity.has("connected"),
             connectivityConnected = connectivity.optBoolean("connected", false),
             connectivityLocalHost = connectivity.optString("local_host", ""),
+            connectivityBoardIp = connectivity.optString("board_ip", ""),
             connectivityEvidence = connectivity.optString("evidence", ""),
             connectivityVerifiedNow = connectivity.optBoolean("verified_now", detection.optBoolean("verified_now", false)),
             connectivityFreshDeviceContact = connectivity.optBoolean("fresh_device_contact", false),
             connectivityLastSeenIso = connectivity.optString("last_seen_iso", ""),
             connectivityBoardName = connectivity.optString("board_name", ""),
             connectivityAppVersion = connectivity.optString("app_version", ""),
+            cloudDeviceId = cloudConsole.optString("device_id", ""),
             cloudLastSeenIso = cloudConsole.optString("last_seen_iso", ""),
             cloudBoardName = cloudConsole.optString("board_name", ""),
+            cloudBoardIp = cloudConsole.optString("board_ip", ""),
             cloudAppVersion = cloudConsole.optString("app_version", ""),
         )
     }
@@ -450,21 +582,28 @@ object PanelApiClient {
         connectivityHasConnected: Boolean,
         connectivityConnected: Boolean,
         connectivityLocalHost: String,
+        connectivityBoardIp: String,
         connectivityEvidence: String,
         connectivityVerifiedNow: Boolean,
         connectivityFreshDeviceContact: Boolean,
         connectivityLastSeenIso: String,
         connectivityBoardName: String,
         connectivityAppVersion: String,
+        cloudDeviceId: String,
         cloudLastSeenIso: String,
         cloudBoardName: String,
+        cloudBoardIp: String,
         cloudAppVersion: String,
     ): RobotRuntimeSnapshot {
         val target = diagnosticsTarget.ifBlank { fallbackWsUrl }
         val mode = diagnosticsMode.ifBlank { controlTransport }
         val directLocalHost = parseLocalHost(target)
         val normalizedConnectivityLocalHost = directRobotHostOrBlank(connectivityLocalHost)
+        val normalizedBoardIp = directRobotHostOrBlank(
+            connectivityBoardIp.ifBlank { cloudBoardIp }
+        )
         val localHost = normalizedConnectivityLocalHost.ifBlank { directLocalHost }
+        val localHostHint = localHost.ifBlank { normalizedBoardIp }
         val panelConnected = when {
             localHost.isNotBlank() -> true
             connectivityHasConnected -> connectivityConnected
@@ -473,17 +612,49 @@ object PanelApiClient {
         }
         return RobotRuntimeSnapshot(
             robotId = robotId,
+            deviceId = cloudDeviceId.trim(),
             connected = panelConnected,
             mode = mode,
             transportState = transportState,
             target = target,
             localHost = localHost,
+            localHostHint = localHostHint,
             connectivityEvidence = connectivityEvidence,
             verifiedNow = connectivityVerifiedNow,
             freshDeviceContact = connectivityFreshDeviceContact,
             lastSeenIso = connectivityLastSeenIso.ifBlank { cloudLastSeenIso },
             boardName = connectivityBoardName.ifBlank { cloudBoardName },
             appVersion = connectivityAppVersion.ifBlank { cloudAppVersion },
+        )
+    }
+
+    internal fun buildMobilePresencePayload(
+        state: MobilePresenceState,
+        localHost: String = "",
+    ): JSONObject {
+        val payloadData = buildMobilePresencePayloadData(state, localHost)
+        val payload = JSONObject()
+            .put("state", payloadData.state)
+            .put("source", payloadData.source)
+        if (payloadData.localHost.isNotBlank()) {
+            payload.put("local_host", payloadData.localHost)
+        }
+        return payload
+    }
+
+    internal fun buildMobilePresencePayloadData(
+        state: MobilePresenceState,
+        localHost: String = "",
+    ): MobilePresencePayload {
+        val normalizedHost = if (state.acceptsLocalHost) {
+            directRobotHostOrBlank(localHost)
+        } else {
+            ""
+        }
+        return MobilePresencePayload(
+            state = state.wireValue,
+            source = "android_local_discovery",
+            localHost = normalizedHost,
         )
     }
 
@@ -522,6 +693,10 @@ object PanelApiClient {
         }
     }
 
+    internal fun parseOnboardingBundle(bundle: JSONObject): OnboardingBundle {
+        return bundle.toOnboardingBundle()
+    }
+
     private fun JSONObject.toOnboardingBundle(): OnboardingBundle {
         val subscription = optJSONObject("subscription") ?: JSONObject()
         val owner = optJSONObject("owner") ?: JSONObject()
@@ -531,6 +706,7 @@ object PanelApiClient {
         return OnboardingBundle(
             code = optString("code", ""),
             panelUrl = optString("panel_url", ""),
+            edgeHubUrl = optString("edge_hub_url", ""),
             panelClientToken = optString("panel_client_token", ""),
             robotId = optString("robot_id", ""),
             robotName = optString("robot_name", optString("robot_id", "")),
@@ -556,6 +732,7 @@ object PanelApiClient {
     private fun JSONObject.toSelfhostXiaozhiBundle(): SelfhostXiaozhiBundle {
         return SelfhostXiaozhiBundle(
             provider = optString("provider", ""),
+            deviceId = optString("device_id", ""),
             otaUrl = optString("ota_url", ""),
             activateUrl = optString("activate_url", ""),
             websocketUrl = optString("websocket_url", ""),
@@ -623,13 +800,30 @@ object PanelApiClient {
         }
     }
 
+    private fun newJsonCall(
+        http: OkHttpClient,
+        url: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+        headers: Map<String, String> = emptyMap(),
+    ): Call {
+        return http.newCall(buildJsonRequest(url, method, body, headers))
+    }
+
     private fun requestJson(
         http: OkHttpClient,
         url: String,
         method: String = "GET",
         body: JSONObject? = null,
         headers: Map<String, String> = emptyMap(),
-    ): JSONObject {
+    ): JSONObject = executeJson(newJsonCall(http, url, method, body, headers))
+
+    private fun buildJsonRequest(
+        url: String,
+        method: String,
+        body: JSONObject?,
+        headers: Map<String, String>,
+    ): Request {
         val builder = Request.Builder().url(url)
         for ((key, value) in headers) {
             if (value.isNotBlank()) {
@@ -639,10 +833,17 @@ object PanelApiClient {
         if (method != "GET") {
             builder.method(method, (body?.toString() ?: "{}").toRequestBody(JSON_MEDIA))
         }
-        http.newCall(builder.build()).execute().use { resp ->
+        return builder.build()
+    }
+
+    internal fun executeJson(call: Call): JSONObject {
+        call.execute().use { resp ->
             val raw = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                throw IOException(if (raw.isNotBlank()) raw else "HTTP ${resp.code}")
+                throw PanelHttpException(
+                    statusCode = resp.code,
+                    message = if (raw.isNotBlank()) raw else "HTTP ${resp.code}",
+                )
             }
             return if (raw.isBlank()) JSONObject() else JSONObject(raw)
         }
