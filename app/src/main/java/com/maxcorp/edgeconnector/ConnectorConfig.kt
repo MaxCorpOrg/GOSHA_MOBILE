@@ -57,6 +57,8 @@ private const val K_NOTIFICATION_PERMISSION_PROMPT_VERSION = "notification_permi
 private const val CLIENT_NAME = "android-app"
 private const val CLIENT_VERSION = "0.1.0"
 
+internal fun runtimeDefaultPanelBaseUrl(): String = BuildConfig.DEFAULT_PANEL_BASE_URL.trim()
+
 private fun sanitizeRobotHost(rawHost: String): String {
     val host = rawHost.trim()
     val normalized = host.lowercase()
@@ -461,8 +463,9 @@ class ConfigStore internal constructor(
     }
 
     fun loadDraft(): OnboardingDraft {
+        val defaultPanelBaseUrl = runtimeDefaultPanelBaseUrl()
         return OnboardingDraft(
-            panelBaseUrl = prefs.getString(K_PANEL_URL, "http://151.241.228.232:18876") ?: "http://151.241.228.232:18876",
+            panelBaseUrl = prefs.getString(K_PANEL_URL, defaultPanelBaseUrl)?.ifBlank { defaultPanelBaseUrl } ?: defaultPanelBaseUrl,
             hubBaseUrl = prefs.getString(K_HUB_URL, "") ?: "",
             robotId = prefs.getString(K_ROBOT_ID, "") ?: "",
             expectedDeviceId = prefs.getString(K_EXPECTED_DEVICE_ID, "") ?: "",
@@ -546,7 +549,7 @@ class ConfigStore internal constructor(
 }
 
 data class OnboardingDraft(
-    val panelBaseUrl: String = "http://151.241.228.232:18876",
+    val panelBaseUrl: String = runtimeDefaultPanelBaseUrl(),
     val hubBaseUrl: String = "",
     val robotId: String = "",
     val expectedDeviceId: String = "",

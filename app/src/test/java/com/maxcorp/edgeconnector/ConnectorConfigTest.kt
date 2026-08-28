@@ -292,6 +292,31 @@ class ConnectorConfigTest {
     }
 
     @Test
+    fun `explicit runtime panel endpoint configures blank draft without public fallback`() {
+        val current = OnboardingDraft(
+            panelBaseUrl = "",
+            hubBaseUrl = "",
+            cloudEndpoint = "",
+            robotId = "",
+            expectedDeviceId = "",
+        )
+
+        val runtime = mergeRuntimeEndpointConfig(
+            current = current,
+            panelBaseUrl = "https://panel.example.test",
+            edgeHubUrl = "wss://hub.example.test/mcp/",
+            cloudEndpoint = "wss://voice.example.test/mcp/",
+            robotId = "gosha-main",
+        )
+
+        assertEquals("https://panel.example.test", runtime.panelBaseUrl)
+        assertEquals("wss://hub.example.test/mcp/", runtime.hubBaseUrl)
+        assertEquals("wss://voice.example.test/mcp/", runtime.cloudEndpoint)
+        assertEquals("gosha-main", runtime.robotId)
+        assertEquals("", runtime.token)
+    }
+
+    @Test
     fun `runtime url migration preserves token and device identity without relay literals`() {
         val current = OnboardingDraft(
             panelBaseUrl = "https://relay.example.test",

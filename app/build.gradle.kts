@@ -1,3 +1,4 @@
+import java.net.URI
 import java.util.Properties
 
 plugins {
@@ -23,14 +24,36 @@ fun configValue(name: String): String =
 fun escapeBuildConfigString(value: String): String =
     value.replace("\\", "\\\\").replace("\"", "\\\"")
 
+fun isHttpUrl(value: String): Boolean {
+    return try {
+        val uri = URI(value.trim())
+        uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank()
+    } catch (_: Exception) {
+        false
+    }
+}
+
 val rustoreKeystoreFile = configValue("RUSTORE_KEYSTORE_FILE")
 val rustoreKeystorePassword = configValue("RUSTORE_KEYSTORE_PASSWORD")
 val rustoreKeyAlias = configValue("RUSTORE_KEY_ALIAS")
 val rustoreKeyPassword = configValue("RUSTORE_KEY_PASSWORD")
+val runtimePanelBaseUrl = configValue("GOSHA_PANEL_BASE_URL")
 val rustorePrivacyPolicyUrl = configValue("RUSTORE_PRIVACY_POLICY_URL")
-    .ifBlank { "http://151.241.228.232:18876/gosha/privacy" }
 val rustoreTermsOfUseUrl = configValue("RUSTORE_TERMS_OF_USE_URL")
-    .ifBlank { "http://151.241.228.232:18876/gosha/terms" }
+
+gradle.taskGraph.whenReady {
+    val releaseRequested = allTasks.any { task ->
+        task.name.contains("Release", ignoreCase = true)
+    }
+    if (releaseRequested) {
+        require(isHttpUrl(rustorePrivacyPolicyUrl)) {
+            "Release build requires RUSTORE_PRIVACY_POLICY_URL as an http(s) URL from keystore.properties, Gradle property, or env."
+        }
+        require(isHttpUrl(rustoreTermsOfUseUrl)) {
+            "Release build requires RUSTORE_TERMS_OF_USE_URL as an http(s) URL from keystore.properties, Gradle property, or env."
+        }
+    }
+}
 
 android {
     namespace = "com.maxcorp.gosha.mobile"
@@ -44,6 +67,11 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "DEFAULT_PANEL_BASE_URL",
+            "\"${escapeBuildConfigString(runtimePanelBaseUrl)}\""
+        )
         buildConfigField(
             "String",
             "PRIVACY_POLICY_URL",

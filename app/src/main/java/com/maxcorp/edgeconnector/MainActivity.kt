@@ -588,7 +588,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun panelBaseUrl(): String {
         val draft = configStore.loadDraft()
-        return draft.panelBaseUrl.ifBlank { "http://151.241.228.232:18876" }
+        return draft.panelBaseUrl.trim()
     }
 
     private fun updateRegistrationUi() {
