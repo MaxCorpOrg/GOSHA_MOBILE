@@ -1,5 +1,15 @@
 # AGENT CHECKPOINT
 
+## Свежая контрольная точка 2026-08-28
+
+- Рабочая ветка `codex/mobile-runtime-config-hardening-20260828` поверх `61b8d1e` доводит исправление P1 по runtime-конфигурации Android release.
+- Release-путь теперь требует явные `http(s)` значения для `GOSHA_PANEL_BASE_URL`, `RUSTORE_PRIVACY_POLICY_URL` и `RUSTORE_TERMS_OF_USE_URL` как в Gradle gate, так и в `build_rustore_release.sh`. Без них выпуск останавливается fail-closed.
+- Debug default для адреса панели остаётся пустым; activation на fresh install теперь не пытается идти в пустой endpoint и показывает понятную ошибку настройки панели.
+- Runtime/test/examples не закрепляют временный relay или реальные публичные IP: example values и unit fixtures используют `*.example.test`.
+- Последовательные локальные проверки без APK/install/device/live: negative и positive `:app:verifyReleaseRuntimeConfig`, `testClientDebugUnitTest` — 154 tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`; secret/hardcoded endpoint scans по product/test файлам — чисто.
+- Новый commit уже создан и проверен одним независимым read-only reviewer GPT-5.5/xhigh: P0/P1/P2 нет. Существующая AI Office карточка `task-20260828-ai-robots-app-roadmap` обновлена, отчёт опубликован в её Mattermost root.
+- Осталось: решить, как вводить локальный branch в Draft PR `#51` и запускать ли внешнюю CI. Телефон, робот, production, relay и AI Office worker не включать без отдельного разрешения.
+
 ## Свежая контрольная точка 2026-08-27
 
 - Platform quality gate уже закрыт; Android Draft PR `#51` теперь тоже получил terminal AI Office `PASS`, но остаётся Draft/Open и не сливается.
@@ -123,8 +133,8 @@
   - `testClientDebugUnitTest`
 - Выполнен живой прогон на телефоне `TECNO LI9`:
   - приложение установлено через `adb`
-  - код `MJ6SG97A` принят
-  - сохранены новые адреса `18876/18080`
+  - обезличенный activation code принят
+  - сохранены новые runtime endpoint значения без публикации конкретного временного адреса
   - телефон переведён в сеть `GOSHA-A-1BE1`
   - открыт экран локального портала робота
 - Исправлена ложная мобильная эвристика:
@@ -168,7 +178,7 @@
 - В iOS `Info.plist` уже добавлены:
   - явные `panel/legal/portal` URL;
   - `GOSHA-` + `Xiaozhi-` SSID prefixes;
-  - `ATS`-исключения для `151.241.228.232:18876` и `192.168.4.1`;
+  - `ATS`-исключения для `TEMP_NL_RELAY_HTTP_HOST` и `192.168.4.1`;
   - `NSLocalNetworkUsageDescription`
 - И уже подтверждён симуляторный install/launch:
   - `xcrun simctl install booted .../Гоша.app`

@@ -39,7 +39,7 @@ class RobotPortalClientRoutePolicyTest {
     fun `external url keeps default route even with robot network`() {
         assertTrue(
             RobotPortalClient.shouldIncludeDefaultNetworkCandidate(
-                url = "http://151.241.228.232:18876/api/mobile/robots/gosha-main/runtime",
+                url = "http://panel.example.test:18876/api/mobile/robots/gosha-main/runtime",
                 hasRobotNetworkCandidate = true,
             )
         )
@@ -49,7 +49,7 @@ class RobotPortalClientRoutePolicyTest {
     fun `external url keeps default route when robot network is unknown`() {
         assertTrue(
             RobotPortalClient.shouldIncludeDefaultNetworkCandidate(
-                url = "http://151.241.228.232:18876/api/mobile/robots/gosha-main/runtime",
+                url = "http://panel.example.test:18876/api/mobile/robots/gosha-main/runtime",
                 hasRobotNetworkCandidate = false,
             )
         )

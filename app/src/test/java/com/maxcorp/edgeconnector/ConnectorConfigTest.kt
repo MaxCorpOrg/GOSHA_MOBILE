@@ -8,18 +8,18 @@ import org.junit.Test
 class ConnectorConfigTest {
     @Test
     fun `parse cloud endpoint extracts hub token and robot id`() {
-        val parts = parseCloudEndpoint("ws://151.241.228.232:18080/mcp/?token=test-token&robot_id=gosha-main")
+        val parts = parseCloudEndpoint("ws://voice.example.test:18080/mcp/?token=test-token&robot_id=gosha-main")
 
-        assertEquals("ws://151.241.228.232:18080/mcp/", parts.hubBaseUrl)
+        assertEquals("ws://voice.example.test:18080/mcp/", parts.hubBaseUrl)
         assertEquals("test-token", parts.token)
         assertEquals("gosha-main", parts.robotId)
     }
 
     @Test
     fun `parse cloud endpoint falls back to base url when query is absent`() {
-        val parts = parseCloudEndpoint("ws://151.241.228.232:18080/mcp/")
+        val parts = parseCloudEndpoint("ws://voice.example.test:18080/mcp/")
 
-        assertEquals("ws://151.241.228.232:18080/mcp/", parts.hubBaseUrl)
+        assertEquals("ws://voice.example.test:18080/mcp/", parts.hubBaseUrl)
         assertEquals("", parts.token)
         assertEquals("", parts.robotId)
     }
@@ -292,16 +292,41 @@ class ConnectorConfigTest {
     }
 
     @Test
+    fun `explicit runtime panel endpoint configures blank draft without public fallback`() {
+        val current = OnboardingDraft(
+            panelBaseUrl = "",
+            hubBaseUrl = "",
+            cloudEndpoint = "",
+            robotId = "",
+            expectedDeviceId = "",
+        )
+
+        val runtime = mergeRuntimeEndpointConfig(
+            current = current,
+            panelBaseUrl = "https://panel.example.test",
+            edgeHubUrl = "wss://hub.example.test/mcp/",
+            cloudEndpoint = "wss://voice.example.test/mcp/",
+            robotId = "gosha-main",
+        )
+
+        assertEquals("https://panel.example.test", runtime.panelBaseUrl)
+        assertEquals("wss://hub.example.test/mcp/", runtime.hubBaseUrl)
+        assertEquals("wss://voice.example.test/mcp/", runtime.cloudEndpoint)
+        assertEquals("gosha-main", runtime.robotId)
+        assertEquals("", runtime.token)
+    }
+
+    @Test
     fun `runtime url migration preserves token and device identity without relay literals`() {
         val current = OnboardingDraft(
             panelBaseUrl = "https://relay.example.test",
             hubBaseUrl = "wss://relay-hub.example.test/mcp/",
-            cloudEndpoint = "wss://relay-voice.example.test/mcp/?token=runtime-token&robot_id=gosha-main",
+            cloudEndpoint = "wss://relay-voice.example.test/mcp/?token=t&robot_id=gosha-main",
             robotId = "gosha-main",
             expectedDeviceId = "aa:bb:cc:dd:ee:ff",
-            token = "runtime-token",
-            panelClientToken = "mobile-token",
-            onboardingCode = "claim-code",
+            token = "t",
+            panelClientToken = "m",
+            onboardingCode = "c",
             robotHost = "192.168.1.159",
         )
 
@@ -325,9 +350,9 @@ class ConnectorConfigTest {
         assertEquals("wss://future-voice.example.test/mcp/", migrated.cloudEndpoint)
         assertEquals("gosha-main", migrated.robotId)
         assertEquals("aa:bb:cc:dd:ee:ff", migrated.expectedDeviceId)
-        assertEquals("runtime-token", migrated.token)
-        assertEquals("mobile-token", migrated.panelClientToken)
-        assertEquals("claim-code", migrated.onboardingCode)
+        assertEquals("t", migrated.token)
+        assertEquals("m", migrated.panelClientToken)
+        assertEquals("c", migrated.onboardingCode)
         assertEquals("192.168.1.159", migrated.robotHost)
         assertTrue(
             listOf(migrated.panelBaseUrl, migrated.hubBaseUrl, migrated.cloudEndpoint)

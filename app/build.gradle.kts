@@ -1,3 +1,4 @@
+import java.net.URI
 import java.util.Properties
 
 plugins {
@@ -23,14 +24,58 @@ fun configValue(name: String): String =
 fun escapeBuildConfigString(value: String): String =
     value.replace("\\", "\\\\").replace("\"", "\\\"")
 
+fun isHttpUrl(value: String): Boolean {
+    return try {
+        val uri = URI(value.trim())
+        uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank()
+    } catch (_: Exception) {
+        false
+    }
+}
+
 val rustoreKeystoreFile = configValue("RUSTORE_KEYSTORE_FILE")
 val rustoreKeystorePassword = configValue("RUSTORE_KEYSTORE_PASSWORD")
 val rustoreKeyAlias = configValue("RUSTORE_KEY_ALIAS")
 val rustoreKeyPassword = configValue("RUSTORE_KEY_PASSWORD")
+val runtimePanelBaseUrl = configValue("GOSHA_PANEL_BASE_URL")
 val rustorePrivacyPolicyUrl = configValue("RUSTORE_PRIVACY_POLICY_URL")
-    .ifBlank { "http://151.241.228.232:18876/gosha/privacy" }
 val rustoreTermsOfUseUrl = configValue("RUSTORE_TERMS_OF_USE_URL")
-    .ifBlank { "http://151.241.228.232:18876/gosha/terms" }
+
+val releaseHttpUrlRequirements = mapOf(
+    "GOSHA_PANEL_BASE_URL" to runtimePanelBaseUrl,
+    "RUSTORE_PRIVACY_POLICY_URL" to rustorePrivacyPolicyUrl,
+    "RUSTORE_TERMS_OF_USE_URL" to rustoreTermsOfUseUrl,
+)
+
+fun releaseHttpUrlErrors(): List<String> =
+    releaseHttpUrlRequirements
+        .filterValues { !isHttpUrl(it) }
+        .keys
+        .toList()
+
+fun requireReleaseRuntimeConfig() {
+    val errors = releaseHttpUrlErrors()
+    require(errors.isEmpty()) {
+        "Release build requires valid http(s) URLs from keystore.properties, Gradle properties, or env: ${errors.joinToString(", ")}."
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val releaseRequested = allTasks.any { task ->
+        task.name.contains("Release", ignoreCase = true)
+    }
+    if (releaseRequested) {
+        requireReleaseRuntimeConfig()
+    }
+}
+
+tasks.register("verifyReleaseRuntimeConfig") {
+    group = "verification"
+    description = "Fails unless release panel and legal URLs are configured explicitly."
+    doLast {
+        requireReleaseRuntimeConfig()
+    }
+}
 
 android {
     namespace = "com.maxcorp.gosha.mobile"
@@ -44,6 +89,11 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "DEFAULT_PANEL_BASE_URL",
+            "\"${escapeBuildConfigString(runtimePanelBaseUrl)}\""
+        )
         buildConfigField(
             "String",
             "PRIVACY_POLICY_URL",

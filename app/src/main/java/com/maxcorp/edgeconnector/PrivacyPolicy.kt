@@ -3,8 +3,16 @@ package com.maxcorp.gosha.mobile
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import java.net.URI
 
-private fun isHttpUrl(url: String): Boolean = url.startsWith("http://") || url.startsWith("https://")
+internal fun isHttpUrl(url: String): Boolean {
+    return try {
+        val uri = URI(url.trim())
+        uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank()
+    } catch (_: Exception) {
+        false
+    }
+}
 
 private fun openInternalDocument(
     context: Context,
