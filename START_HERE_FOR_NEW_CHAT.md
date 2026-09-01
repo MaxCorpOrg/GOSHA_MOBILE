@@ -45,7 +45,7 @@
 ## Сначала прочитать
 
 1. `AGENTS.md`
-2. `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+2. `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
 3. `README_RU.md`
 4. `docs/NEW_CHAT_CHECKPOINT_RU.md`
 5. `docs/AGENT_CHECKPOINT_RU.md`
@@ -56,7 +56,7 @@
    - `ios/AGENTS.md`
    - `docs/GOSHA_MOBILE_IOS_HANDOFF_RU.md`
    - при iOS-first задаче предпочитай отдельный репозиторий:
-     - `/Users/maksim/Developer/GOSHA_MOBILE_IOS`
+     - `<IOS_WORKSPACE>`
      - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
 
 ## Что это за проект
@@ -79,7 +79,7 @@
   - `Xiaozhi-`
 - В текстах и интерфейсе пользователю показывать только `GOSHA-`
 - Если нужно быстро свериться, где серверный голос, панель и прошивка, смотри:
-  - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+  - `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
 
 ## Обязательный старт нового чата
 
@@ -97,7 +97,7 @@
 ## Актуальная рабочая точка
 
 - Для локального портала не начинать из `main`, а использовать отдельное рабочее дерево:
-  - `/home/max/worktrees/gosha/mobile-portal`
+  - `<MOBILE_PORTAL_WORKTREE>`
 - Текущая рабочая ветка этого контура:
   - `feature/mobile-hotspot-portal`
 - Ветка создана для устранения пустого экрана и разрыва сети в `HotspotPortalActivity`.

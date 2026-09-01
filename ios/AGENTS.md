@@ -9,7 +9,7 @@
    - `../docs/NEW_CHAT_CHECKPOINT_RU.md`
    - `../docs/AGENT_CHECKPOINT_RU.md`
    - `../docs/PROJECT_STATUS_RU.md`
-   - `/Users/maksim/Developer/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+   - `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
 2. Проверь, не ломает ли изменение:
    - `/api/mobile/resolve-code`
    - `/api/mobile/activate-code`
@@ -32,7 +32,7 @@
 ## Локальная проверка
 
 ```bash
-cd /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS
+cd <LEGACY_IOS_WORKSPACE>
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 xcrun swiftc -typecheck -sdk "$SDK" -target x86_64-apple-ios15.0-simulator $(find GoshaMobileIOS -name '*.swift' | sort)
 ```

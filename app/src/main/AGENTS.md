@@ -4,12 +4,12 @@
 
 ## Перед работой прочитать
 
-1. `/home/max/GOSHA_MOBILE/AGENTS.md`
-2. `/home/max/GOSHA_MOBILE/docs/PROJECT_STATUS_RU.md`
-3. `/home/max/GOSHA_MOBILE/docs/NEW_CHAT_CHECKPOINT_RU.md`
+1. `<MOBILE_WORKSPACE>/AGENTS.md`
+2. `<MOBILE_WORKSPACE>/docs/PROJECT_STATUS_RU.md`
+3. `<MOBILE_WORKSPACE>/docs/NEW_CHAT_CHECKPOINT_RU.md`
 4. Если правка затрагивает серверный пакет подключения:
-   - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
-   - `/home/max/GOSHA_PLATFORM/docs/PROJECT_STATUS_RU.md`
+   - `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
+   - `<PLATFORM_WORKSPACE>/docs/PROJECT_STATUS_RU.md`
 
 ## Что здесь искать
 

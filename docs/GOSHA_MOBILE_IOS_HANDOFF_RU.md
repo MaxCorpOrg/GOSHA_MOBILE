@@ -7,7 +7,7 @@
 ## Где лежит iOS-каркас
 
 ```bash
-cd /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS
+cd <LEGACY_IOS_WORKSPACE>
 ```
 
 Важные файлы:
@@ -41,20 +41,20 @@ cd /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS
   - `Аккаунт`
   - `Поддержка`
 - Локально собран совместимый `XcodeGen 2.30.0`:
-  - `/Users/maksim/bin/xcodegen`
+  - `xcodegen`
 - Через него уже сгенерирован Xcode-проект:
   - `ios/GoshaMobileIOS/GoshaMobileIOS.xcodeproj`
 - Локальная проверка Swift уже прошла:
 
 ```bash
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-xcrun swiftc -typecheck -sdk "$SDK" -target x86_64-apple-ios15.0-simulator $(find /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS/GoshaMobileIOS -name '*.swift' | sort)
+xcrun swiftc -typecheck -sdk "$SDK" -target x86_64-apple-ios15.0-simulator $(find <LEGACY_IOS_WORKSPACE>/GoshaMobileIOS -name '*.swift' | sort)
 ```
 
 - И уже подтверждена сборка проекта через `xcodebuild`:
 
 ```bash
-xcodebuild -project /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS/GoshaMobileIOS.xcodeproj -scheme GoshaMobileIOS -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project <LEGACY_IOS_WORKSPACE>/GoshaMobileIOS.xcodeproj -scheme GoshaMobileIOS -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
 - В `Info.plist` уже добавлены:
@@ -65,7 +65,7 @@ xcodebuild -project /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS/Gosh
 - И уже подтверждён запуск приложения в iOS Simulator:
 
 ```bash
-xcrun simctl install booted /Users/maksim/Library/Developer/Xcode/DerivedData/.../Debug-iphonesimulator/Гоша.app
+xcrun simctl install booted <XCODE_DERIVED_DATA>/Debug-iphonesimulator/Гоша.app
 xcrun simctl launch booted com.maxcorp.gosha.mobile.ios
 ```
 

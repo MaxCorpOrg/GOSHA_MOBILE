@@ -78,14 +78,14 @@
   - `ConnectorForegroundService` может работать в режиме локальной проверки и публикации `mobile_presence`, даже если edge Hub не настроен или его протокол ещё не готов;
   - Hub-loop запускается только при пригодной edge-hub-конфигурации, ждёт `agent_ready` и корректно отменяет heartbeat при закрытии сессии;
   - автоматическое post-provision обнаружение теперь fail-closed: проверяются только сохранённый адрес и подсказка панели, общий поиск по подсети включается только явным флагом ручного сценария.
-  - точечные unit-тесты по конфигу, пакету подключения, discovery и HubSocket прошли с `ANDROID_HOME=/home/max/Android/Sdk`.
+  - точечные unit-тесты по конфигу, пакету подключения, discovery и HubSocket прошли с `ANDROID_HOME=<ANDROID_SDK_ROOT>`.
 - `2026-08-24` уточнена live-граница post-provision: после успешного портала старый `robotHost` может быть очищен перед получением нового DHCP-адреса, поэтому общий поиск разрешён только внутри явного provisioning-return и только с проверкой `robot_id` через read-only `self.get_system_info` перед сохранением найденного host.
 - Дополнительно закрыт Android/VPN-дефект выбора сети: `WifiInfoHelper` исключает `TRANSPORT_VPN` при выборе настоящего Wi‑Fi `Network`, чтобы `currentSubnetPrefix` и `WifiBoundHttp` не уходили в VPN-underlay.
 - `testClientDebugUnitTest`, `assembleClientDebug` и `lintClientDebug` проходят.
 - SHA-256 ранее установленного принятого `app-client-debug.apk`: `0bc800b567eb87e3bcb7250e374a23416da3063a7f3463ebbff0ae0a35590c52`; новый кандидат `2026-08-24` ещё не устанавливался.
 - В финальном живом цикле `2026-07-23T12:03:32Z — 12:03:57Z` PID не изменился; платформа получила `unavailable/running`, затем `available/running`, `verifying/retrying` и только после локальной проверки `ready/completed` с одним `correlation_id`.
 - После цикла очередь приложения содержит `0` ожидающих событий, фоновая служба работает, в журнале процесса нет `FATAL EXCEPTION`.
-- Обезличенное доказательство: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260723T111058Z-read-only/live-validation/acceptance-evidence.json`, SHA-256 `600c3d526dddf95a39c38c1cf126a952d02a2e6b7b506f8a591b6f94d7690f0e`.
+- Обезличенное доказательство: `<PRIVATE_VALIDATION_EVIDENCE>/task-20260723T111058Z-read-only/live-validation/acceptance-evidence.json`, SHA-256 `600c3d526dddf95a39c38c1cf126a952d02a2e6b7b506f8a591b6f94d7690f0e`.
 - Первый независимый аудит ИИ-офиса `task-20260723T112420Z-read-only-iss` не нашёл P0 и подтвердил платформенный контракт; его P2 по терминальности `timed_out` закрыт отдельной политикой и тестом, а P1 воспроизводимости закрывается этим коммитом и свежим живым прогоном.
 - Следующий P1 общего контура находится не в Android: перевести операторские команды `MCP` со старого облачного моста на собственный шлюз платформы и получить подтверждённый ответ физического робота.
 
@@ -113,8 +113,8 @@
   - приложение вернулось в `MENU`, осталось там и показало честный статус `Робот в сети` с локальным адресом `192.168.1.159`;
   - прямой запрос к панели подтвердил свежий `mobile_presence = home_wifi_local`, `local_host = 192.168.1.159`, `connected = true`;
   - после сворачивания на `213` секунд PID `25698` сохранился, `ConnectorForegroundService` остался с `isForeground=true`, выполненные проверки продолжали давать `executed ok=true`, а панель получила новую фоновую запись возрастом `10` секунд;
-  - полный Android-журнал: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260721T100653Z-android-wi-fi-p2-tecno-li9-gosha-main/live-validation/android-adb.log`, SHA-256 `ca1629784a6406a5573483ccdbac3423aa2f2df933f4c8feca4d14cb73c11e8a`;
-  - обезличенный снимок панели и фоновой службы: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260721T100653Z-android-wi-fi-p2-tecno-li9-gosha-main/live-validation/acceptance-evidence.json`, SHA-256 `b64b46ecf98330b1df865b14ec58e65c5a9a5b17f6255b8a95460e8e45745fdd`;
+  - полный Android-журнал: `<PRIVATE_VALIDATION_EVIDENCE>/task-20260721T100653Z-android-wi-fi-p2-tecno-li9-gosha-main/live-validation/android-adb.log`, SHA-256 `ca1629784a6406a5573483ccdbac3423aa2f2df933f4c8feca4d14cb73c11e8a`;
+  - обезличенный снимок панели и фоновой службы: `<PRIVATE_VALIDATION_EVIDENCE>/task-20260721T100653Z-android-wi-fi-p2-tecno-li9-gosha-main/live-validation/acceptance-evidence.json`, SHA-256 `b64b46ecf98330b1df865b14ec58e65c5a9a5b17f6255b8a95460e8e45745fdd`;
   - независимый `reviewer` AI_OFFICE не нашёл P0/P1/P2 для проверенного сценария и рекомендовал зафиксировать контрольную точку;
   - живой P2 по повторным системным запросам сети закрыт; продуктовый код по результату прогона менять не потребовалось.
 - В `GOSHA_MOBILE` унифицированы правила общения агента:
@@ -125,7 +125,7 @@
   - агент обязан проверять checkpoint-документы, текущую ветку и верхний коммит;
   - в первом содержательном ответе обязан явно назвать ветку, стадию и следующий приоритетный шаг.
 - Для параллельной ручной разработки зафиксирована отдельная политика `git worktree`:
-  - ручные рабочие деревья выносятся в `/home/max/worktrees/gosha/<контур>-<задача>`;
+  - ручные рабочие деревья выносятся в `<TASK_WORKTREE>`;
   - новые мобильные ветки по умолчанию ответвляются от `main`;
   - flow подключения, runtime-диагностика и `RuStore`-подготовка не должны смешиваться в одной ветке без явной причины.
 - Создан отдельный локальный проект `GOSHA_MOBILE`.
@@ -138,7 +138,7 @@
   - `https://github.com/MaxCorpOrg/GOSHA_MOBILE`
 - Исходники взяты одноразовым копированием из старого Android-клиента `AI_ROBOT`.
 - Общая карта всех связанных контуров зафиксирована в:
-  - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+  - `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
 - Новый канонический идентификатор приложения:
   - `com.maxcorp.gosha.mobile`
 - В проекте оставлен только клиентский вариант сборки.
@@ -210,7 +210,7 @@
 - Для iOS уже создан отдельный GitHub-репозиторий:
   - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
 - Локальный отдельный рабочий корень iOS:
-  - `/Users/maksim/Developer/GOSHA_MOBILE_IOS`
+  - `<IOS_WORKSPACE>`
 - iOS-каркас переведён на новый контракт `GOSHA_PLATFORM`:
   - адреса `18876/18080`
   - `bundle.mobile_profile`
@@ -218,7 +218,7 @@
   - основной префикс `GOSHA-`
   - переходный префикс `Xiaozhi-`
 - Для iOS локально собран совместимый `XcodeGen 2.30.0`:
-  - `/Users/maksim/bin/xcodegen`
+  - `xcodegen`
 - Через него уже сгенерирован реальный Xcode-проект:
   - `ios/GoshaMobileIOS/GoshaMobileIOS.xcodeproj`
 - Для iOS уже подтверждена локальная проверка:
@@ -239,11 +239,11 @@
   - `xcrun simctl install booted .../Гоша.app`
   - `xcrun simctl launch booted com.maxcorp.gosha.mobile.ios`
 - Для локального сопровождения обоих репозиториев добавлен безопасный sync-механизм:
-  - `/Users/maksim/bin/gosha_repo_sync.sh`
+  - `<LOCAL_SYNC_HELPER>`
   - `launchd` job `com.maxcorp.gosha-repo-sync`
   - job делает `fetch --all --prune` и выполняет `pull --ff-only` только на чистой ветке без локальных коммитов
   - текущий отчёт сохраняется в:
-    - `/Users/maksim/Developer/.gosha-sync/last_report.txt`
+    - `<LOCAL_SYNC_REPORT>`
 
 ## На чем остановились
 
@@ -400,13 +400,13 @@
   - после появления устройства можно продолжить через:
     - `/office approve-plan task-20260709T172634Z-android-wi-fi`;
   - подтверждены Android-точки входа:
-    - рабочее дерево `/home/max/worktrees/gosha/mobile-portal`;
+    - рабочее дерево `<MOBILE_PORTAL_WORKTREE>`;
     - ветка `feature/mobile-hotspot-portal`;
     - верхний коммит `7313570 Стабилизировать локальный Android-сигнал и обновить checkpoint`;
   - `adb` в обычном `PATH` не найден, но на машине есть:
-    - `/home/max/Android/Sdk/platform-tools/adb`;
+    - `<ANDROID_SDK_ROOT>/platform-tools/adb`;
   - подключённых Android-устройств нет:
-    - `/home/max/Android/Sdk/platform-tools/adb devices -l` возвращает пустой список;
+    - `<ANDROID_SDK_ROOT>/platform-tools/adb devices -l` возвращает пустой список;
     - `lsusb` не показывает телефон;
   - поэтому живой Wi-Fi цикл, установка APK и `adb logcat` в этом входе физически заблокированы до подключения или авторизации телефона;
   - актуальный `clientDebug` APK собран успешно:
@@ -442,7 +442,7 @@
   - если локальный адрес так и не подтвердился после лимита попыток, `MENU` показывает конечный честный статус: робот на связи с платформой, но локальный адрес не подтверждён;
   - внешний `nc` и внешние `WebSocket`-сеансы к `:8080` для этой правки не используются.
   - локальная проверка кода подтверждена:
-    - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon testClientDebugUnitTest assembleClientDebug lintClientDebug`.
+    - `ANDROID_HOME=<ANDROID_SDK_ROOT> ./gradlew --no-daemon testClientDebugUnitTest assembleClientDebug lintClientDebug`.
 - `2026-07-11` исправление подтверждено отдельным полным циклом №3:
   - исправленный APK и установленный пакет совпали, SHA-256 `ed6a97dc1c4bc60aa334df17ff8bf18269e3c6aad79a6dbd51ab6b8c84ecbe09`;
   - `POST /submit` зафиксирован в `16:05:51`, `done.html` — в `16:05:55`, домашний `Wi-Fi` — в `16:06:00`;
@@ -450,7 +450,7 @@
   - `MENU` сохранил конечный статус «Робот в сети» и не откатился назад;
   - после сворачивания на 196 секунд PID остался `31472`, `ConnectorForegroundService` сохранил `isForeground=true`, проверки продолжили давать `executed ok=true`;
   - панель показывала свежий `mobile_presence = home_wifi_local`, `local_host = 192.168.1.159`, возраст 8 секунд;
-  - журнал `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260711-cycle3-post-panel-only-fix/20260711-cycle3-complete-adb.log`, SHA-256 `12d2b3f039a2797acad5e1ed18f85dab4b1cbc885d3f427c761b646061515b09`.
+  - журнал `<PRIVATE_VALIDATION_EVIDENCE>/task-20260711-cycle3-post-panel-only-fix/20260711-cycle3-complete-adb.log`, SHA-256 `12d2b3f039a2797acad5e1ed18f85dab4b1cbc885d3f427c761b646061515b09`.
 - `2026-07-11` выполнен дополнительный контрольный цикл на текущей домашней сети `4G-CPE-1884`:
   - приложение увидело `GOSHA-A-1BE1`, подключило телефон к сети робота и открыло встроенный портал;
   - первый `POST /submit` в `20:43:06` не завершился успешно, а повторный запрос в `20:44:12` получил `200` в `20:44:15` и открыл `done.html`;
@@ -460,12 +460,12 @@
   - статус после отправки настроек стал честнее: приложение сообщает, что запрос отправлен и оно ждёт ответ портала или переход к завершению, а не утверждает преждевременно, что настройки уже приняты;
   - в `MENU` действие переподключения переименовано в «Сменить Wi‑Fi робота», поднято выше и оставлено основной кнопкой; информационное действие переименовано в «Статус и диагностика» и переведено во вторичный стиль;
   - локальная проверка правки пройдена:
-    - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`;
+    - `ANDROID_HOME=<ANDROID_SDK_ROOT> ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`;
   - телефон вернулся в домашний `Wi-Fi` в `20:44:21–20:44:22`, а ограниченный локальный поиск нашёл `gosha-main` по `192.168.0.103` на седьмой попытке в `20:44:55`, примерно через `33` секунды;
   - всё время поиска отображалось состояние загрузки, затем приложение вернулось в `MENU` со статусом «Робот в сети» и не откатилось назад;
   - после сворачивания больше чем на три минуты `ConnectorForegroundService` оставался `isForeground=true`, реальные проверки продолжали давать `executed ok=true`;
   - прямая проверка runtime панели подтвердила свежий `mobile_presence = home_wifi_local`, `local_host = 192.168.0.103`, возраст сигнала `1` секунду и `connectivity.evidence = local_host`;
-  - журнал `/home/max/AI_OFFICE/local_only/ai-office/logs/manual-20260711-android-cycle3/cycle3-adb.log`, SHA-256 `fca5bb635297d846aee0de32ca9840414674981e067f011913249d23341ca731`.
+  - журнал `<PRIVATE_VALIDATION_EVIDENCE>/manual-20260711-android-cycle3/cycle3-adb.log`, SHA-256 `fca5bb635297d846aee0de32ca9840414674981e067f011913249d23341ca731`.
 - Живая проверка новой политики маршрута завершена на установленном APK SHA-256 `5b7f253ddba0736b216b6d520352901d657edd8bc04371171498fb135fd90ca1`:
   - системный Android-выбор подключил телефон к `GOSHA-A-1BE1`, портал и его ресурсы открылись только через сеть робота `candidate=576`;
   - временный `code=0` на `/scan` не вызвал `candidate=default`, что подтверждает исправление ошибочного запасного маршрута;
@@ -474,7 +474,7 @@
   - телефон вернулся в `4G-CPE-1884`, робот автоматически найден по `192.168.0.103`, `MENU` сохранил «Робот в сети»;
   - панель после прогона показала свежий `home_wifi_local`, `local_host = 192.168.0.103`, возраст `4` секунды и `connectivity.evidence = local_host`;
   - следовательно, Android-P1 по `candidate=default` закрыт, а первый `code=0` остаётся отдельной межконтурной диагностикой портала/прошивки по UART;
-  - журнал `/home/max/AI_OFFICE/local_only/ai-office/logs/manual-20260711-portal-route-fix-live/portal-route-fix-adb.log`, SHA-256 `0836673d4d4cab3aa8ec8405b11bf5e50057c43bf547e05d4062def1129d815c`.
+  - журнал `<PRIVATE_VALIDATION_EVIDENCE>/manual-20260711-portal-route-fix-live/portal-route-fix-adb.log`, SHA-256 `0836673d4d4cab3aa8ec8405b11bf5e50057c43bf547e05d4062def1129d815c`.
 - `2026-07-12` по задаче `task-20260712T065931Z-gosha-mobile-home-max-worktrees-gosha-mobile-portal-featu` внесена Android-правка восстановления локального портала после ручного выключения/включения `Wi‑Fi` телефона:
   - `RobotWifiConnector` сбрасывает устаревший запомненный `Network`, если Android больше не считает его сетью робота, и отдаёт экрану портала событие потери сети;
   - `HotspotPortalActivity` при потере маршрута к порталу показывает честный статус переподключения и повторно запускает системный запрос сети `GOSHA-*` / переходный `Xiaozhi-*`;
@@ -482,7 +482,7 @@
   - выход назад из портала до отправки формы больше не запускает пост-портальный поиск как после `submit`, а возвращает пользователя в восстанавливаемый шаг повторного подключения;
   - добавлены регрессионные unit-тесты политики маршрута и отмены портала до отправки;
   - локальная проверка пройдена:
-    - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
+    - `ANDROID_HOME=<ANDROID_SDK_ROOT> ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
 - Отдельный P1 платформы по `robot_ws_probe_state` реализован в `hotfix/edge-hub-probe-state`, коммит `10bcbf1`, draft PR `https://github.com/MaxCorpOrg/GOSHA_PLATFORM/pull/25`.
 - Живое восстановление портала на новом APK подтверждено `2026-07-12`:
   - установленный APK совпал со сборкой, SHA-256 `2d107ddf596bbbaf1e6eaff680078fa3ef41552bd29cf5bb1f9d4ff9650683d1`;
@@ -493,8 +493,8 @@
   - Android вернулся в `MENU` без обратного выброса в подключение и без повторного Wi‑Fi-диалога после `submit`;
   - приложение успешно отправило `mobile_presence = home_wifi_local` с `local_host = 192.168.1.159`;
   - после чистой фоновой выдержки больше `218` секунд PID `19519` не изменился, `ConnectorForegroundService` сохранил `isForeground=true`, выполненные проверки продолжили давать `ok=true`;
-  - Android-журнал: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260712T065630Z-android/live-recovery-validation/android-adb.log`, SHA-256 `46a32c0e8c965dba30893df2394454eaf684d6653e40836d385ac76ecc10e1e9`;
-  - UART-журнал: `/home/max/AI_OFFICE/local_only/ai-office/logs/task-20260712T065630Z-android/live-recovery-validation/robot-uart.log`, SHA-256 `7a0692e9b4702a9e86252dcaf8f050ef85c118df18d9f614d92fe14145ce9318`.
+  - Android-журнал: `<PRIVATE_VALIDATION_EVIDENCE>/task-20260712T065630Z-android/live-recovery-validation/android-adb.log`, SHA-256 `46a32c0e8c965dba30893df2394454eaf684d6653e40836d385ac76ecc10e1e9`;
+  - UART-журнал: `<PRIVATE_VALIDATION_EVIDENCE>/task-20260712T065630Z-android/live-recovery-validation/robot-uart.log`, SHA-256 `7a0692e9b4702a9e86252dcaf8f050ef85c118df18d9f614d92fe14145ce9318`.
 - `2026-07-12` по fixer-задаче `task-20260712T113152Z-p2-commit-1c7aff2-hotspotportalactivity-on` закрыт review-P2 поверх `1c7aff2`:
   - `HotspotPortalActivity.onResume()` теперь сверяет фактическое состояние системного `Wi‑Fi`, чтобы не зависеть только от `WIFI_STATE_CHANGED_ACTION`, который мог быть пропущен во время `onStop` или системных настроек;
   - состояния `Enabled` и `Enabling` сбрасывают cooldown через `PortalWifiReconnectPolicy.onWifiEnabled(...)` и сразу запускают `requestRobotWifiReconnectIfNeeded()`, если портал ещё не отправлен и не завершён;
@@ -503,7 +503,7 @@
   - добавлены unit-тесты `PortalWifiReconnectPolicyTest` для сценария `onStop -> Wi‑Fi enabled -> onResume`, `Enabling`, активного запроса и guard после `submit/completed`;
   - локальная проверка пройдена:
     - `git diff --check`;
-    - `ANDROID_HOME=/home/max/Android/Sdk ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
+    - `ANDROID_HOME=<ANDROID_SDK_ROOT> ./gradlew --no-daemon assembleClientDebug testClientDebugUnitTest lintClientDebug`.
   - финальный reviewer `task-20260712T114343Z-read-only-review-origin-ai-office-fixer-issue-31-p2-com` не нашёл P0/P1/P2;
   - правка перенесена в каноническую `feature/mobile-hotspot-portal` коммитами `64d3ce2` и `d2f04fe`;
   - каноническая сборка `assembleClientDebug testClientDebugUnitTest lintClientDebug` завершена успешно за `2m 21s`.

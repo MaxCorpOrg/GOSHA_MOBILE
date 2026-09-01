@@ -14,7 +14,7 @@
 
 Если нужно быстро понять, где сервер, голоса, прошивка и мобильный контракт, сначала открой:
 
-- `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+- `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
 
 ## Основная задача
 
@@ -53,7 +53,7 @@
 Локальная проверка:
 
 ```bash
-cd /home/max/GOSHA_MOBILE
+cd <MOBILE_WORKSPACE>
 ./gradlew --no-daemon clean assembleClientDebug testClientDebugUnitTest lintClientDebug
 ```
 
@@ -63,7 +63,7 @@ cd /home/max/GOSHA_MOBILE
 Сборка клиентского релиза:
 
 ```bash
-cd /home/max/GOSHA_MOBILE
+cd <MOBILE_WORKSPACE>
 ./gradlew --no-daemon assembleClientRelease
 ```
 
