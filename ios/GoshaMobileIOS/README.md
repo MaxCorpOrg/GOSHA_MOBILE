@@ -30,7 +30,7 @@
 В папке лежит `project.yml` для `XcodeGen`:
 
 ```bash
-cd /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS
+cd <LEGACY_IOS_WORKSPACE>
 xcodegen generate
 open GoshaMobileIOS.xcodeproj
 ```
@@ -38,20 +38,20 @@ open GoshaMobileIOS.xcodeproj
 На этой машине `XcodeGen 2.30.0` уже собран локально в:
 
 ```bash
-/Users/maksim/bin/xcodegen
+xcodegen
 ```
 
 Поэтому здесь можно генерировать проект так:
 
 ```bash
-cd /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS
-/Users/maksim/bin/xcodegen generate
+cd <LEGACY_IOS_WORKSPACE>
+xcodegen generate
 ```
 
 ## Локальная проверка Swift
 
 ```bash
-cd /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS
+cd <LEGACY_IOS_WORKSPACE>
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 xcrun swiftc -typecheck -sdk "$SDK" -target x86_64-apple-ios15.0-simulator $(find GoshaMobileIOS -name '*.swift' | sort)
 ```
@@ -65,7 +65,7 @@ xcrun swiftc -typecheck -sdk "$SDK" -target x86_64-apple-ios15.0-simulator $(fin
 И уже подтверждена сборка без signing для симулятора:
 
 ```bash
-xcodebuild -project /Users/maksim/Developer/GOSHA_MOBILE/ios/GoshaMobileIOS/GoshaMobileIOS.xcodeproj -scheme GoshaMobileIOS -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project <LEGACY_IOS_WORKSPACE>/GoshaMobileIOS.xcodeproj -scheme GoshaMobileIOS -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
 ## Runtime config

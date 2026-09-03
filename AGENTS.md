@@ -7,21 +7,22 @@
 1. Прочитай:
    - `README_RU.md`
    - `START_HERE_FOR_NEW_CHAT.md`
-   - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+   - `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
    - `docs/NEW_CHAT_CHECKPOINT_RU.md`
    - `docs/AGENT_CHECKPOINT_RU.md`
    - `docs/PROJECT_STATUS_RU.md`
+   - `docs/HARDWARE_DEVELOPMENT_POLICY_RU.md`
 2. Если работаешь с Android-кодом, дополнительно открой:
    - `app/AGENTS.md`
 3. Если работаешь с iOS-кодом, дополнительно открой:
    - `ios/AGENTS.md`
    - `docs/GOSHA_MOBILE_IOS_HANDOFF_RU.md`
    - отдельный iOS-репозиторий:
-     - `/Users/maksim/Developer/GOSHA_MOBILE_IOS`
+     - `<IOS_WORKSPACE>`
      - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
 4. Если правка затрагивает только серверный пакет подключения, сначала проверь связанную документацию в:
-   - `/home/max/GOSHA_PLATFORM/AGENTS.md`
-   - `/home/max/GOSHA_PLATFORM/docs/PROJECT_STATUS_RU.md`
+   - `<PLATFORM_WORKSPACE>/AGENTS.md`
+   - `<PLATFORM_WORKSPACE>/docs/PROJECT_STATUS_RU.md`
 
 ## Обязательный вход в новый чат
 
@@ -49,7 +50,7 @@
   - `https://github.com/MaxCorpOrg/GOSHA_MOBILE_IOS`
 - Старое опубликованное приложение из `AI_ROBOT` считается легаси-контуром и не является основным объектом этой папки.
 - Если нужно быстро понять, где сервер, голоса, прошивка и мобильный контракт, сначала смотри:
-  - `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+  - `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
 
 ## Главные правила
 
@@ -68,7 +69,7 @@
 
 - Для параллельных направлений используй отдельные рабочие деревья `git worktree`, а не одну общую рабочую копию Android-проекта.
 - Канонический путь ручных рабочих деревьев разработчика:
-  - `/home/max/worktrees/gosha/<контур>-<задача>`
+  - `<TASK_WORKTREE>`
 - Для новых ручных задач в `GOSHA_MOBILE` базой по умолчанию считай `main`.
 - Для ручных рабочих веток используй такие префиксы:
   - `feature/` — продуктовая функция

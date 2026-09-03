@@ -14,7 +14,7 @@
 
 Если нужно быстро понять, где сервер, голоса, прошивка и мобильный контракт, сначала открой:
 
-- `/home/max/GOSHA_PLATFORM/docs/GOSHA_PROJECT_MAP_RU.md`
+- `<PLATFORM_WORKSPACE>/docs/GOSHA_PROJECT_MAP_RU.md`
 
 ## Основная задача
 
@@ -24,14 +24,16 @@
 - работать с `GOSHA_PLATFORM`;
 - находить робота в домашней сети через локальный `WebSocket` `ws://<ip>:8080/ws`;
 - при необходимости переводить пользователя в портал настройки робота `http://192.168.4.1`;
-- использовать новый серверный контур `Гоша`, не завязываясь на старые адреса `8876/8890`.
+- использовать новый серверный контур `Гоша`, не завязываясь на старый серверный контур.
 
-## Текущие адреса по умолчанию
+## Runtime-адреса
 
 - панель:
-  - `http://151.241.228.232:18876`
+  - задаётся через `GOSHA_PANEL_BASE_URL` или пакет подключения
 - совместимый серверный контур:
-  - `ws://151.241.228.232:18080`
+  - задаётся через поля `cloud_endpoint`, `edge_hub_url` и связанные runtime-значения
+- временный live relay:
+  - обозначается только как `TEMP_NL_RELAY` до переезда на `FUTURE_PRODUCTION_SERVER`
 - локальный портал робота:
   - `http://192.168.4.1`
 
@@ -51,7 +53,7 @@
 Локальная проверка:
 
 ```bash
-cd /home/max/GOSHA_MOBILE
+cd <MOBILE_WORKSPACE>
 ./gradlew --no-daemon clean assembleClientDebug testClientDebugUnitTest lintClientDebug
 ```
 
@@ -61,7 +63,7 @@ cd /home/max/GOSHA_MOBILE
 Сборка клиентского релиза:
 
 ```bash
-cd /home/max/GOSHA_MOBILE
+cd <MOBILE_WORKSPACE>
 ./gradlew --no-daemon assembleClientRelease
 ```
 

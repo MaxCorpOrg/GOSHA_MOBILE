@@ -9,6 +9,76 @@ class ProvisionCoordinatorTest {
     private val robotWifiPrefix = RobotBranding.PRIMARY_WIFI_PREFIX
 
     @Test
+    fun `return check waits until robot portal closes`() {
+        assertFalse(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = true,
+                robotWifiPortalActive = true,
+                returnCheckRunning = false,
+            )
+        )
+        assertTrue(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = true,
+                robotWifiPortalActive = false,
+                returnCheckRunning = false,
+            )
+        )
+    }
+
+    @Test
+    fun `return check does not start when portal was closed before submit`() {
+        assertFalse(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = true,
+                robotWifiPortalActive = false,
+                returnCheckRunning = false,
+                portalSubmitted = false,
+            )
+        )
+    }
+
+    @Test
+    fun `portal wifi reconnect stops after submit or completion`() {
+        assertTrue(
+            ProvisionCoordinator.shouldReconnectPortalWifi(
+                portalSubmitted = false,
+                portalCompleted = false,
+            )
+        )
+        assertFalse(
+            ProvisionCoordinator.shouldReconnectPortalWifi(
+                portalSubmitted = true,
+                portalCompleted = false,
+            )
+        )
+        assertFalse(
+            ProvisionCoordinator.shouldReconnectPortalWifi(
+                portalSubmitted = true,
+                portalCompleted = true,
+            )
+        )
+    }
+
+    @Test
+    fun `return check does not start twice or outside provisioning`() {
+        assertFalse(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = true,
+                robotWifiPortalActive = false,
+                returnCheckRunning = true,
+            )
+        )
+        assertFalse(
+            ProvisionCoordinator.shouldStartReturnCheck(
+                awaitingRobotProvision = false,
+                robotWifiPortalActive = false,
+                returnCheckRunning = false,
+            )
+        )
+    }
+
+    @Test
     fun `stays on robot wifi first without manual hint`() {
         val plan = ProvisionCoordinator.planAttempt(
             index = 0,
@@ -99,5 +169,41 @@ class ProvisionCoordinatorTest {
         assertEquals(12, plan.displayAttempt)
         assertEquals(26, plan.displayTotal)
         assertTrue(plan.shouldCheckPanelAfterDiscovery)
+    }
+
+    @Test
+    fun `panel local host completes post portal return check`() {
+        val plan = ProvisionCoordinator.planPanelSignal(
+            RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.CONNECTED_LOCALLY,
+                localHost = " 192.168.1.159 ",
+                localHostHint = "192.168.1.159",
+            )
+        )
+
+        require(plan is ProvisionPanelSignalPlan.CompleteWithLocalHost)
+        assertEquals("192.168.1.159", plan.localHost)
+    }
+
+    @Test
+    fun `panel only signal keeps post portal local discovery running`() {
+        val plan = ProvisionCoordinator.planPanelSignal(
+            RobotConnectivityDecision(
+                type = RobotConnectivityDecisionType.CONNECTED_VIA_PANEL,
+                localHostHint = " 192.168.1.159 ",
+            )
+        )
+
+        require(plan is ProvisionPanelSignalPlan.ContinueLocalDiscovery)
+        assertEquals("192.168.1.159", plan.localHostHint)
+    }
+
+    @Test
+    fun `unknown panel signal does not complete post portal check`() {
+        val plan = ProvisionCoordinator.planPanelSignal(
+            RobotConnectivityDecision(type = RobotConnectivityDecisionType.UNKNOWN)
+        )
+
+        assertTrue(plan is ProvisionPanelSignalPlan.NoPanelSignal)
     }
 }

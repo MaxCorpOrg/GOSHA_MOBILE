@@ -61,6 +61,7 @@ internal enum class ConnectedMenuRoute {
 internal data class ConnectedMenuTransition(
     val route: ConnectedMenuRoute,
     val localHost: String = "",
+    val localHostHint: String = "",
 )
 
 internal object OnboardingCoordinator {
@@ -100,6 +101,19 @@ internal object OnboardingCoordinator {
         }
     }
 
+    fun menuVisibility(
+        decision: RobotConnectivityDecision,
+        setupCompleted: Boolean,
+    ): WifiStepTransition? {
+        if (setupCompleted) {
+            return null
+        }
+        return visibility(
+            decision = decision,
+            presentation = WifiPresentationMode.OPEN_RECONNECT_STEP,
+        )
+    }
+
     fun reconnectWaiting(): WifiStepTransition {
         return WifiStepTransition(
             presentation = WifiPresentationMode.OPEN_RECONNECT_STEP,
@@ -125,10 +139,12 @@ internal object OnboardingCoordinator {
             RobotConnectivityDecisionType.CONNECTED_LOCALLY -> ConnectedMenuTransition(
                 route = ConnectedMenuRoute.LOCAL_HOST,
                 localHost = decision.localHost,
+                localHostHint = decision.localHostHint,
             )
 
             RobotConnectivityDecisionType.CONNECTED_VIA_PANEL -> ConnectedMenuTransition(
                 route = ConnectedMenuRoute.PANEL_ONLY,
+                localHostHint = decision.localHostHint,
             )
 
             else -> null

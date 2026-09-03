@@ -13,8 +13,15 @@
     <string name="loading_title_after_portal">Подключаем робота</string>
     <string name="loading_body_after_portal">Ждем, пока робот сохранит Wi‑Fi, выйдет из своей сети и появится в приложении.</string>
     <string name="loading_badge">РОБОТ ГОША</string>
-    <string name="menu_hero_title">Робот на связи</string>
-    <string name="menu_hero_body">Гоша подключён. Открой нужный раздел и продолжай настройку дальше.</string>
+    <string name="menu_hero_title">Статус робота</string>
+    <string name="menu_hero_body">Здесь сразу видно, подключён ли Гоша, ждёт ли он новый Wi‑Fi или сейчас нужна дополнительная проверка.</string>
+    <string name="menu_hero_title_checking">Проверяем робота</string>
+    <string name="menu_hero_title_no_home_wifi">Телефон не в Wi‑Fi</string>
+    <string name="menu_hero_title_vpn_active">VPN мешает проверке</string>
+    <string name="menu_hero_title_robot_visible">Робот ждёт подключения</string>
+    <string name="menu_hero_title_connected">Робот в сети</string>
+    <string name="menu_hero_title_platform_only">Робот на связи с платформой</string>
+    <string name="menu_hero_title_missing">Робот не найден</string>
     <string name="diagnostics_title">Диагностика подключения</string>
     <string name="diagnostics_empty">нет</string>
     <string name="diagnostics_waiting">ожидание</string>
@@ -47,6 +54,7 @@
     <string name="diagnostics_local_robot_wifi_hidden">сеть робота GOSHA рядом не видна</string>
     <string name="diagnostics_local_permission_required">нужны права Android на поиск Wi‑Fi, чтобы увидеть сеть робота GOSHA</string>
     <string name="diagnostics_local_wait_home_wifi">жду возврат телефона в домашний Wi‑Fi</string>
+    <string name="diagnostics_local_vpn_active">на телефоне активен VPN; локальная проверка робота из приложения сейчас заблокирована</string>
     <string name="diagnostics_local_settling">робот применяет Wi‑Fi и перезапускает локальные сервисы</string>
     <string name="diagnostics_panel_skipped_robot_wifi">панель не проверялась: телефон в сети робота</string>
     <string name="diagnostics_panel_skipped_robot_visible">панель не проверялась: рядом видна сеть робота %1$s</string>
@@ -57,7 +65,10 @@
     <string name="diagnostics_panel_delayed_local_search">панель пока не проверялась: даю роботу время поднять сеть после подключения</string>
     <string name="diagnostics_local_platform_only">локальный адрес ещё не подтверждён; робот уже вышел на связь с платформой</string>
     <string name="diagnostics_panel_connected_host">панель подтверждает локальный адрес робота: %1$s</string>
-    <string name="diagnostics_panel_connected_platform">панель подтверждает, что робот уже на связи с платформой, но локальный адрес ещё не пришёл</string>
+    <string name="diagnostics_panel_connected_platform">панель подтверждает, что робот уже на связи с платформой; локальный адрес не подтверждён</string>
+    <string name="diagnostics_local_platform_only_retrying">робот уже на связи с платформой; повторно проверяю локальный адрес в домашней сети</string>
+    <string name="diagnostics_local_platform_only_final">локальный адрес не подтвердился после повторных проверок; робот остаётся на связи с платформой</string>
+    <string name="diagnostics_local_platform_only_final_with_hint">локальный адрес %1$s не подтвердился после повторных проверок; робот остаётся на связи с платформой</string>
 
     <string name="welcome_step_title">1. Начало</string>
     <string name="welcome_body_main">Привет, вы подключаете робота. Для начала проверьте, выключен ли у вас VPN.</string>
@@ -132,11 +143,20 @@
     <string name="wifi_permission_request_status">Жду разрешение Android на подключение к Wi‑Fi робота</string>
     <string name="wifi_connecting_robot_text">Подключаю телефон к сети робота GOSHA-XXXX...</string>
     <string name="wifi_connecting_robot_status">Подключаю телефон к Wi‑Fi робота</string>
+    <string name="wifi_connecting_robot_request_choice">Если Android сейчас покажет выбор сети, выберите %1$s. Жду подтверждение перехода телефона в сеть робота.</string>
     <string name="wifi_connected_robot_text">Телефон подключен к сети робота: %1$s</string>
     <string name="wifi_connect_failed_status">Не удалось подключиться к Wi‑Fi робота</string>
     <string name="wifi_continue_on_robot_network">Телефон уже подключен к сети робота. Продолжите подключение.</string>
     <string name="wifi_robot_visible_nearby">Вижу рядом сеть робота %1$s. Нажмите «Подключить робота», чтобы открыть подключение.</string>
     <string name="wifi_reconnect_hint">Можно подключить робота заново и выбрать новую сеть Wi‑Fi.</string>
+    <string name="wifi_reconnect_status_checking">Проверяю, где сейчас робот: в домашней сети, в своей сети GOSHA или вне сети.</string>
+    <string name="wifi_reconnect_status_checking_saved_host">Сначала быстро проверяю адрес робота %1$s, потом при необходимости сверяю домашнюю сеть и панель.</string>
+    <string name="wifi_reconnect_status_checking_network">Быстро проверяю домашнюю сеть и состояние робота в панели.</string>
+    <string name="wifi_reconnect_status_found">Робот уже в вашей сети. Можно вернуться в меню или подключить его к новому Wi‑Fi.</string>
+    <string name="wifi_reconnect_status_platform_only">Робот на связи с платформой. Локальный адрес пока не подтверждён. Подождите несколько секунд и обновите статус или подключите новую сеть.</string>
+    <string name="wifi_reconnect_status_not_found">Робот сейчас не найден. Если хотите подключить его заново, переведите его в режим Wi‑Fi и нажмите «Подключить робота».</string>
+    <string name="wifi_reconnect_status_no_home_wifi">Телефон не в домашнем Wi‑Fi. Подключите его к своей сети, чтобы быстро проверить состояние робота.</string>
+    <string name="wifi_reconnect_status_vpn_active">На телефоне активен VPN. Пока он включён, приложение может не видеть робота в домашней сети. Временно выключите VPN и нажмите «Обновить».</string>
     <string name="wifi_connect_timeout_retry">Не получилось быстро открыть сеть робота. Если робот уже подключился к домашнему Wi‑Fi, приложение сейчас покажет главное меню. Если нет, попробуйте нажать кнопку еще раз.</string>
     <string name="wifi_reconnect_wait_mode">Робот пока не вошел в режим настройки Wi‑Fi. Сначала переведите его в режим подключения, чтобы рядом появилась сеть GOSHA-...</string>
     <string name="wifi_reconnect_status">Открыт шаг повторного подключения робота</string>
@@ -145,8 +165,11 @@
     <string name="wifi_robot_already_connected_panel">Робот уже подключен к домашнему Wi‑Fi</string>
     <string name="wifi_robot_already_connected_toast">Робот уже подключен</string>
     <string name="wifi_robot_hotspot_hidden_normal">Робот уже подключен к домашнему Wi‑Fi. Сеть GOSHA-... больше не видна — это нормально.</string>
-    <string name="wifi_robot_resolving_address">Робот уже подключен к домашнему Wi‑Fi. Адрес уточняется автоматически.</string>
-    <string name="wifi_robot_connected_platform">Робот уже на связи с платформой. Локальный адрес ещё уточняется автоматически.</string>
+    <string name="wifi_robot_resolving_address">Робот на связи с платформой. Локальный адрес пока не подтверждён. Подождите несколько секунд или обновите статус.</string>
+    <string name="wifi_robot_connected_platform">Робот на связи с платформой. Локальный адрес не подтверждён.</string>
+    <string name="wifi_robot_local_address_not_confirmed">Робот на связи с платформой, но приложение не подтвердило локальный адрес после повторных проверок.</string>
+    <string name="wifi_robot_recovery_timed_out">Локальная связь с роботом не подтвердилась после автоматических проверок. Можно обновить статус или сменить Wi‑Fi робота.</string>
+    <string name="wifi_robot_wait_home_wifi">Робот уже принял настройки и вышел из режима подключения. Теперь верните телефон в домашний Wi‑Fi, чтобы приложение нашло локальный адрес робота.</string>
     <string name="wifi_robot_connected_platform_toast">Робот уже на связи с платформой</string>
     <string name="wifi_connected_done">Робот подключен к домашнему Wi‑Fi.</string>
     <string name="button_connect_robot">Подключить робота</string>
@@ -161,14 +184,26 @@
     <string name="menu_label_owner">Пользователь</string>
     <string name="menu_robot_empty">Робот еще не подключен</string>
     <string name="menu_value_empty">Не указано</string>
-    <string name="menu_button_status">Проверить робота</string>
+    <string name="menu_button_status">Статус и диагностика</string>
     <string name="menu_button_cabinet">Мой кабинет</string>
     <string name="menu_button_guides">Что умеет Гоша</string>
     <string name="menu_button_support">Нужна помощь</string>
-    <string name="menu_button_reconnect">Подключить к новому Wi‑Fi</string>
+    <string name="menu_button_reconnect">Сменить Wi‑Fi робота</string>
     <string name="menu_button_reset">Подготовить для нового робота</string>
     <string name="status_prefix">Статус: %1$s</string>
     <string name="status_connected_default">Устройство подключено и готово к работе</string>
+    <string name="menu_status_checking">Проверяю, подключён ли робот и доступен ли он в вашей сети...</string>
+    <string name="menu_status_checking_saved_host">Проверяю, отвечает ли робот по адресу %1$s...</string>
+    <string name="menu_status_no_home_wifi">Телефон не подключён к домашнему Wi‑Fi. Подключите Wi‑Fi и повторите проверку робота.</string>
+    <string name="menu_status_phone_on_robot_wifi">Телефон сейчас в сети робота %1$s. Можно сразу открыть подключение и выбрать новый Wi‑Fi.</string>
+    <string name="menu_status_robot_visible">Рядом видна сеть робота %1$s. Робот не в домашней сети: можно подключить его заново.</string>
+    <string name="menu_status_connected_host">Робот в сети и готов к работе. Локальный адрес: %1$s.</string>
+    <string name="menu_status_platform_only">Робот на связи с платформой. Локальный адрес не подтверждён. Приложение проверит его снова при следующем открытии главного меню.</string>
+    <string name="menu_status_platform_local_unconfirmed">Робот на связи с платформой, но локальный адрес не подтвердился после повторных проверок. Приложение проверит его снова при следующем открытии главного меню.</string>
+    <string name="menu_status_recovery_timed_out">Локальная связь с роботом не подтвердилась после автоматических проверок. Обновите статус или смените Wi‑Fi робота.</string>
+    <string name="menu_status_platform_wait_home_wifi">Робот уже вышел из режима настройки. Теперь подключите телефон обратно к домашнему Wi‑Fi, чтобы приложение завершило локальную проверку.</string>
+    <string name="menu_status_robot_missing">Робот сейчас не найден в домашней сети. Если он включён, подождите немного или подключите его к новому Wi‑Fi.</string>
+    <string name="menu_status_vpn_active">На телефоне активен VPN. Из‑за этого приложение сейчас не может проверить локальный адрес робота в домашней сети. Временно выключите VPN и повторите проверку.</string>
 
     <string name="button_next">Далее</string>
     <string name="button_back">Назад</string>
@@ -183,6 +218,16 @@
     <string name="device_status_label_plan">Тариф</string>
     <string name="device_status_robot_empty">Не зарегистрирован</string>
     <string name="device_status_wifi_empty">Телефон не подключен к Wi‑Fi</string>
+    <string name="background_access_label">Фоновая связь с панелью</string>
+    <string name="background_access_dialog_title">Разрешите Гоше работать в фоне</string>
+    <string name="background_access_transsion_instruction">На телефонах TECNO, Infinix и itel системное энергосбережение может остановить связь с панелью даже при активном уведомлении. На следующем экране найдите «Гоша» и выберите «Нет ограничений».</string>
+    <string name="background_access_generic_instruction">Чтобы связь с панелью не прерывалась после сворачивания приложения, разрешите Гоше фоновую работу и снимите ограничения батареи в настройках телефона.</string>
+    <string name="background_access_open_settings">Открыть настройки</string>
+    <string name="background_access_configure">Настроить фоновую работу</string>
+    <string name="background_access_later">Позже</string>
+    <string name="background_access_open_error">Не удалось открыть настройки фоновой работы</string>
+    <string name="background_access_notifications_disabled">Уведомления Гоши отключены. Разрешите их, чтобы Android показывал постоянную фоновую службу.</string>
+    <string name="background_access_notification_settings">Настроить уведомления</string>
 
     <string name="cabinet_title">Личный кабинет</string>
     <string name="cabinet_subtitle">Здесь можно проверить и изменить имя, почту и телефон.</string>
@@ -234,7 +279,13 @@
     <string name="portal_status_wait">Ожидание подключения к Wi‑Fi робота...</string>
     <string name="portal_status_opening">Открываю страницу робота...</string>
     <string name="portal_status_opened">Страница робота открыта. Выберите для робота домашний Wi‑Fi 2.4 GHz и нажмите подключение.</string>
-    <string name="portal_status_submitted">Настройки отправлены. Жду, пока робот применит Wi‑Fi и перезапустится...</string>
+    <string name="portal_status_reconnecting_wifi">Сеть робота потеряна. Снова прошу Android подключиться к GOSHA-...</string>
+    <string name="portal_status_reconnected">Сеть робота снова подключена. Открываю страницу робота...</string>
+    <string name="portal_status_wifi_disabled">Wi‑Fi телефона выключен. Включите Wi‑Fi, и приложение сразу снова запросит сеть GOSHA-...</string>
+    <string name="portal_status_wifi_enabling">Wi‑Fi телефона включается. Когда Android подтвердит включение, приложение снова запросит сеть GOSHA-...</string>
+    <string name="portal_status_reconnect_cooldown">Сеть робота пока не подключилась. Повторю запрос через %1$d с, если Wi‑Fi включён.</string>
+    <string name="portal_status_reconnect_failed">Сеть робота пока недоступна. Включите Wi‑Fi телефона, выберите GOSHA-... в системном запросе или нажмите «Обновить».</string>
+    <string name="portal_status_submitted">Запрос отправлен роботу. Жду ответ портала или переход к завершению...</string>
     <string name="portal_status_done">Робот принял настройки. Возвращаю в приложение...</string>
     <string name="portal_status_wait_reboot">Робот принял настройки. Жду, пока его сеть GOSHA исчезнет и телефон вернется в домашний Wi‑Fi...</string>
     <string name="portal_status_wait_reboot_retry">Робот перезагружается и выходит из своей сети... %1$d/%2$d</string>
@@ -242,6 +293,8 @@
     <string name="portal_status_return_timeout">Робот еще переключается. Возвращаю в приложение и продолжаю проверку там...</string>
     <string name="portal_status_error">Не удалось открыть страницу робота. Проверьте, что VPN выключен, и нажмите «Обновить».</string>
     <string name="portal_status_retry">Жду страницу робота... попытка %1$d/4</string>
+    <string name="portal_browser_toast">Открыл страницу робота в системном браузере. После подключения вернитесь в приложение.</string>
+    <string name="portal_browser_fallback_toast">Не удалось открыть системный браузер. Пробую встроенный экран.</string>
 
     <string name="section_badge_loading">Значок робота</string>
     <string name="section_badge_status">Статус робота</string>
@@ -280,6 +333,7 @@
     <string name="activation_fill_client_toast">Введите код, имя, почту и телефон</string>
     <string name="activation_consent_toast">Подтвердите согласие на обработку данных перед подключением робота</string>
     <string name="activation_fill_admin_toast">Введите код подключения. Данные клиента можно оставить пустыми.</string>
+    <string name="activation_panel_url_missing_toast">Адрес панели не настроен. Получите пакет подключения или установите сборку с адресом панели.</string>
     <string name="activation_done_toast">Регистрация завершена</string>
     <string name="activation_failed_toast">Не удалось завершить регистрацию: %1$s</string>
 

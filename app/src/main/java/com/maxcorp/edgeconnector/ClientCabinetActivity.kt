@@ -90,7 +90,7 @@ class ClientCabinetActivity : AppCompatActivity() {
                 if (updated.robotId.isNotBlank()) {
                     PanelApiClient.updateOwner(
                         http = httpClient,
-                        baseUrl = updated.panelBaseUrl.ifBlank { "http://151.241.228.232:18876" },
+                        baseUrl = updated.panelBaseUrl,
                         robotId = updated.robotId,
                         draft = updated,
                     )
