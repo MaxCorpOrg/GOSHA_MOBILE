@@ -17,7 +17,10 @@
 - Предыдущие immutable tasks на `de450fc` и `e72faf3` были `NO-GO`. Их findings закрыты: stale connector/presence/runtime/status, delayed stale command windows и ложное подтверждение фонового режима больше не проходят.
 - Полный Android gate на текущем кандидате: 146 unit tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`.
 - APK, телефон, prefs, live robot, firmware и relay в этой работе не изменялись.
-- Из-за неисправной левой сервы flash, motion и trim остаются запрещены. Следующий шаг — firmware gate, но только неподвижный read-only и без прошивки робота. Operator command gateway остаётся blocked.
+- Неисправная левая серва физически отключена. Flash, motion и trim разрешены
+  по `docs/HARDWARE_DEVELOPMENT_POLICY_RU.md`; следующий firmware/app smoke
+  может включать живую прошивку и малые движения исправных приводов. Operator
+  command gateway остаётся отдельной задачей.
 
 ## Предыдущая контрольная точка 2026-08-26
 

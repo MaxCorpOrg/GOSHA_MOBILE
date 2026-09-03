@@ -8,7 +8,10 @@
 - Fresh install / activation: если адрес панели не настроен, приложение показывает понятную ошибку и не отправляет запрос в пустой endpoint.
 - Проверено локально, строго без телефона и live robot: negative/positive `:app:verifyReleaseRuntimeConfig`, `testClientDebugUnitTest` — 154 tests, `assembleClientDebug`, `lintClientDebug`, `git diff --check`, secret/hardcoded endpoint scans по product/test файлам.
 - Новый commit уже создан и прошёл один независимый read-only review GPT-5.5/xhigh без P0/P1/P2. AI Office карточка `task-20260828-ai-robots-app-roadmap` обновлена, отчёт опубликован в её Mattermost root.
-- Не устанавливать APK, не делать `pm clear`, не трогать телефон, robot, server, relay или worker без отдельного разрешения. Следующий процессный шаг — решить, как вводить локальный branch в Draft PR `#51` и запускать ли внешнюю CI.
+- Установка APK и `pm clear` требуют отдельного плана сохранения пользовательских
+  данных. Живые проверки робота, firmware и motion разрешены по
+  `docs/HARDWARE_DEVELOPMENT_POLICY_RU.md`; server, relay и worker не менять без
+  отдельного решения.
 
 ## Самая свежая точка 2026-08-27
 
@@ -18,7 +21,10 @@
 - Проверки: `testClientDebugUnitTest` — 146 tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`.
 - Закрыты stale connector/presence/runtime/status и ложное подтверждение фонового режима: простое открытие настроек больше не считается подтверждением режима `Нет ограничений`.
 - APK, телефон, живой робот, firmware и relay не трогались.
-- Из-за неисправной левой сервы сохраняется запрет на flash, motion и trim. Следующий gate — firmware, только неподвижный read-only и без прошивки. Operator command gateway остаётся blocked.
+- Неисправная левая серва физически отключена. Flash, motion и trim разрешены
+  по аппаратной политике; следующий gate может включать живую прошивку и малые
+  движения исправных приводов. Operator command gateway остаётся отдельной
+  задачей.
 
 ## Предыдущая точка 2026-08-26
 

@@ -16,7 +16,10 @@
 - Предыдущие immutable tasks на `de450fc` и `e72faf3` были `NO-GO`; stale connector/presence/runtime/status, delayed/stale command windows и ложное подтверждение background guidance закрыты в текущем кандидате.
 - Проверки кандидата: 146 unit tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`.
 - APK, телефон, живой робот, firmware и relay не изменялись; локальная работа была только кодовым и документационным gate без установки и без live-приёмки.
-- Из-за неисправной левой сервы сохраняется запрет на flash, motion и trim. Следующий quality gate — firmware, строго неподвижный read-only и без прошивки робота. Operator command gateway остаётся blocked до закрытия firmware gate.
+- Неисправная левая серва физически отключена. Flash, motion и trim разрешены
+  по `docs/HARDWARE_DEVELOPMENT_POLICY_RU.md`; следующий совместимый gate может
+  включать живую прошивку и малые движения исправных приводов. Operator command
+  gateway остаётся отдельной задачей.
 
 ## Контрольная точка 2026-08-26: исправление Android P1
 

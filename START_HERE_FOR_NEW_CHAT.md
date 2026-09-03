@@ -11,7 +11,10 @@
 - Проверки кандидата: `testClientDebugUnitTest` — 146 tests, 0 failures/errors/skips; `assembleClientDebug` — `PASS`; `lintClientDebug` — 0 errors и 84 прежних warnings; `git diff --check` — `PASS`.
 - Закрыты stale connector/presence/runtime/status и ложное подтверждение фоновой инструкции: простое открытие настроек больше не считается подтверждением режима `Нет ограничений` / background access.
 - APK, телефон, живой робот, firmware и relay в этой работе не изменялись.
-- Из-за неисправной левой сервы сохраняется запрет на flash, motion и trim. Следующий quality gate — firmware, но только неподвижный read-only без прошивки робота. `feature/operator-command-gateway` остаётся blocked.
+- Неисправная левая серва физически отключена. Flash, motion и trim разрешены
+  по `docs/HARDWARE_DEVELOPMENT_POLICY_RU.md`; firmware/app smoke может
+  включать прошивку и малые движения исправных приводов.
+  `feature/operator-command-gateway` остаётся отдельной задачей.
 
 ## Предыдущая точка 2026-08-26
 

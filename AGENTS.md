@@ -11,6 +11,7 @@
    - `docs/NEW_CHAT_CHECKPOINT_RU.md`
    - `docs/AGENT_CHECKPOINT_RU.md`
    - `docs/PROJECT_STATUS_RU.md`
+   - `docs/HARDWARE_DEVELOPMENT_POLICY_RU.md`
 2. Если работаешь с Android-кодом, дополнительно открой:
    - `app/AGENTS.md`
 3. Если работаешь с iOS-кодом, дополнительно открой:
