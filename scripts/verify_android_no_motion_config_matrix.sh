@@ -92,7 +92,7 @@ require_absent "app/build.gradle.kts" "TEMP_NL_RELAY" "forbidden"
 
 printf '\n'
 if [[ "$failures" -ne 0 ]]; then
-  printf 'NO-GO android no motion config matrix smoke failed: %d\n' "$failures"
+  printf 'FAIL android no motion config matrix smoke: %d checks failed; see the exact FAIL rows above\n' "$failures"
   exit 1
 fi
 
