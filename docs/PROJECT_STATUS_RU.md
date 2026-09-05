@@ -1,5 +1,23 @@
 # PROJECT STATUS
 
+**Проверка координатором после восстановления:** JDK 17, Gradle 8.10, SDK 34; `testClientDebugUnitTest assembleClientDebug lintClientDebug` — PASS, 154 теста без ошибок/пропусков, lint 0 errors и 84 прежних warnings. Точные Gradle-задачи из `tasks --all` подтверждены. Release-config guard отверг пустые URL и принял только заданные зарезервированные `example.invalid` URL. Debug APK: 6961549 байт, SHA-256 `d1df71ee91951fcecac112f78f4455e76ec3fdc9c25920fb40721eef52e5019f`; application ID `com.maxcorp.gosha.mobile`, бренд «Гоша», minSdk 26, targetSdk 34. APK не устанавливался. Это локальный debug-артефакт; GitHub CI соберёт свой артефакт и отдельно зафиксирует его digest.
+
+
+> Восстановление координатором 2026-09-05: попытка AI Office завершена `failed / remote_redacted_path`, а не принята как успешная. Пакет `4419dd1db6bc82b194b241982bf2584cdd0faa884df482f595df3502cd60f977` сохранён. Маскирование затронуло исходные строки `org.gradle.java.home` и HTTPS URL wrapper. В отдельной ветке на точной базе PR #67 применены проверенные части патча; удаление машинного JDK-пути выполнено по каноническому файлу, Gradle 8.10 оставлен прежним. Workflow дополнительно исправлен от SIGPIPE в приёме лицензий SDK и не сохраняет checkout credentials. Эта процедура не ослабляет автоматические проверки AI Office и не меняет его terminal историю.
+
+
+## Контрольная точка 2026-09-05: Android stacked CI candidate
+
+- Для задачи `task-20260905-gosha-android-ci-candidate` подготовлен CI-кандидат Android Draft PR поверх канонической базы `a697e8825e26a9717a613bda274b99aeb27c368a`. Scope ограничен CI, release-config/no-motion guard и документацией матрицы приёмки.
+- Добавлен workflow `.github/workflows/android-ci.yml`: запускается на Draft/Open `pull_request` и `workflow_dispatch`, использует только `contents: read`, ставит JDK 17 и Android SDK `platforms;android-34` / `build-tools;34.0.0`.
+- CI проверяет точные Gradle task names через `./gradlew --no-daemon tasks --all`, затем запускает `testClientDebugUnitTest`, `assembleClientDebug`, `lintClientDebug` и `:app:verifyReleaseRuntimeConfig`.
+- Release-config guard остаётся fail-closed: пустая конфигурация должна падать, положительный CI-прогон использует только reserved URL `https://panel.example.invalid` для панели, privacy и terms. Production secrets, signing и release publication не используются.
+- Debug APK в CI сохраняется как artifact вместе с `app-client-debug.apk.sha256`. Локальный worker APK не собрал: в контейнере нет Java/Android SDK, а hard-limit `ulimit -f=8192` не позволяет скачать JDK/SDK/Gradle-архивы.
+- Для CI-переносимости убран tracked `org.gradle.java.home`; исходный публичный Gradle wrapper 8.10 сохранён.
+- `keystore.properties.example` переведён на `panel.example.invalid`; `scripts/verify_android_no_motion_config_matrix.sh` расширен проверками CI-контракта и запретами на `secrets.`, `assembleClientRelease`, `adb`.
+- Добавлен `docs/ANDROID_CI_ACCEPTANCE_MATRIX_RU.md`: воспроизводимая матрица последующей живой приёмки покрывает onboarding, identity, network loss/return, background, events и no-motion. Runtime smoke без телефона и робота не объявляется успешным.
+- Локально в worker пройдены `bash -n scripts/verify_android_no_motion_config_matrix.sh`, `bash scripts/verify_android_no_motion_config_matrix.sh`, `git diff --check`. Телефон, робот, прошивка, серверный пакет, production endpoints и iOS не трогались.
+
 ## Контрольная точка 2026-08-28: Android release runtime config hardening
 
 - Рабочая ветка `codex/mobile-runtime-config-hardening-20260828` поверх `61b8d1e` закрывает P1 по release-конфигурации: `release`-сборка и `build_rustore_release.sh` теперь fail-closed без `GOSHA_PANEL_BASE_URL`, `RUSTORE_PRIVACY_POLICY_URL` и `RUSTORE_TERMS_OF_USE_URL`. `fail-closed` здесь значит, что сборка останавливается вместо молчаливого выпуска APK с пустым адресом панели.

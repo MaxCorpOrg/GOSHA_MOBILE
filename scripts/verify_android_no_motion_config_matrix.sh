@@ -50,6 +50,7 @@ require_file "app/src/main/java/com/maxcorp/edgeconnector/PrivacyPolicy.kt"
 require_file "app/src/test/java/com/maxcorp/edgeconnector/ConfigStoreTest.kt"
 require_file "app/src/test/java/com/maxcorp/edgeconnector/ConnectorConfigTest.kt"
 require_file "app/src/test/java/com/maxcorp/edgeconnector/LegalConfigTest.kt"
+require_file ".github/workflows/android-ci.yml"
 
 printf '\n'
 printf 'row runtime: panel URL comes from GOSHA_PANEL_BASE_URL or activation bundle, not a hardcoded live endpoint\n'
@@ -75,6 +76,20 @@ require_text "app/build.gradle.kts" "tasks.register(\"verifyReleaseRuntimeConfig
 require_text "build_rustore_release.sh" "GOSHA_PANEL_BASE_URL" "release"
 require_text "build_rustore_release.sh" "RUSTORE_PRIVACY_POLICY_URL" "release"
 require_text "build_rustore_release.sh" "RUSTORE_TERMS_OF_USE_URL" "release"
+
+printf '\n'
+printf 'row ci: Draft PR CI is read-only, debug-only, and records a debug APK digest without production signing\n'
+require_text ".github/workflows/android-ci.yml" "pull_request:" "ci"
+require_text ".github/workflows/android-ci.yml" "contents: read" "ci"
+require_text ".github/workflows/android-ci.yml" "java-version: \"17\"" "ci"
+require_text ".github/workflows/android-ci.yml" "platforms;android-34" "ci"
+require_text ".github/workflows/android-ci.yml" "testClientDebugUnitTest assembleClientDebug lintClientDebug" "ci"
+require_text ".github/workflows/android-ci.yml" "scripts/verify_android_no_motion_config_matrix.sh" "ci"
+require_text ".github/workflows/android-ci.yml" "https://panel.example.invalid" "ci"
+require_text ".github/workflows/android-ci.yml" "sha256sum" "ci"
+require_absent ".github/workflows/android-ci.yml" "secrets." "ci"
+require_absent ".github/workflows/android-ci.yml" "assembleClientRelease" "ci"
+require_absent ".github/workflows/android-ci.yml" "adb" "ci"
 
 printf '\n'
 printf 'row legal: legal documents are opened only when configured as explicit http(s) URLs\n'
