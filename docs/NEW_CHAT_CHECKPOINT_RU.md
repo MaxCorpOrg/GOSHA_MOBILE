@@ -1,5 +1,23 @@
 # NEW CHAT CHECKPOINT
 
+**Проверка координатором после восстановления:** JDK 17, Gradle 8.10, SDK 34; `testClientDebugUnitTest assembleClientDebug lintClientDebug` — PASS, 154 теста без ошибок/пропусков, lint 0 errors и 84 прежних warnings. Точные Gradle-задачи из `tasks --all` подтверждены. Release-config guard отверг пустые URL и принял только заданные зарезервированные `example.invalid` URL. Debug APK: 6961549 байт, SHA-256 `d1df71ee91951fcecac112f78f4455e76ec3fdc9c25920fb40721eef52e5019f`; application ID `com.maxcorp.gosha.mobile`, бренд «Гоша», minSdk 26, targetSdk 34. APK не устанавливался. Это локальный debug-артефакт; GitHub CI соберёт свой артефакт и отдельно зафиксирует его digest.
+
+
+> Восстановление координатором 2026-09-05: попытка AI Office завершена `failed / remote_redacted_path`, а не принята как успешная. Пакет `4419dd1db6bc82b194b241982bf2584cdd0faa884df482f595df3502cd60f977` сохранён. Маскирование затронуло исходные строки `org.gradle.java.home` и HTTPS URL wrapper. В отдельной ветке на точной базе PR #67 применены проверенные части патча; удаление машинного JDK-пути выполнено по каноническому файлу, Gradle 8.10 оставлен прежним. Workflow дополнительно исправлен от SIGPIPE в приёме лицензий SDK и не сохраняет checkout credentials. Эта процедура не ослабляет автоматические проверки AI Office и не меняет его terminal историю.
+
+
+## Самая свежая точка 2026-09-05
+
+- AI Office задача `task-20260905-gosha-android-ci-candidate` готовит Android stacked CI-кандидат для Draft PR без телефона, робота, `adb`, motion, flash, trim, gateway, production secrets, production signing и release publication.
+- Каноническая база задания: `a697e8825e26a9717a613bda274b99aeb27c368a`, целевая ветка `ai-office/coder/issue-66-android-no-motion-integration-smoke-after-worker-bundle-update`. Локальная ветка worker — синтетическая `master`; её `HEAD` не является provenance-базой.
+- Добавлен `.github/workflows/android-ci.yml`: `pull_request` запускается и для Draft PR, workflow имеет только `contents: read`, ставит JDK 17 и Android SDK `platforms;android-34` / `build-tools;34.0.0`, проверяет точные Gradle-задачи через `tasks --all`, запускает `testClientDebugUnitTest assembleClientDebug lintClientDebug`, release-config guard в отрицательном и положительном режиме, а затем загружает `app-client-debug.apk` и `app-client-debug.apk.sha256` как artifact.
+- Для обязательной положительной test-конфигурации release guard используется только `https://panel.example.invalid`; `keystore.properties.example` также переведён на `panel.example.invalid`.
+- CI-переносимость исправлена: из `gradle.properties` убран закоммиченный `org.gradle.java.home`; исходный публичный Gradle wrapper 8.10 сохранён.
+- Обновлён `scripts/verify_android_no_motion_config_matrix.sh`: он теперь дополнительно проверяет CI-контракт, отсутствие `secrets.`, `assembleClientRelease` и `adb` в workflow, а также наличие APK digest.
+- Добавлена воспроизводимая матрица последующей живой приёмки: `docs/ANDROID_CI_ACCEPTANCE_MATRIX_RU.md`. Она покрывает onboarding, identity, network loss/return, background, events и no-motion; runtime smoke без телефона не считается пройденным.
+- В worker локально прошли `bash -n scripts/verify_android_no_motion_config_matrix.sh`, `bash scripts/verify_android_no_motion_config_matrix.sh` и `git diff --check`. Gradle-задачи и локальный APK не собраны: в контейнере нет Java/Android SDK, а hard-limit `ulimit -f=8192` запрещает скачать JDK/SDK/Gradle-архивы больше примерно 8 МБ.
+- iOS не трогался. Следующий шаг — reviewer должен проверить workflow и первый GitHub Actions artifact; живой runtime smoke запускать только отдельной задачей с телефоном и роботом.
+
 ## Самая свежая точка 2026-08-28
 
 - Текущая рабочая ветка: `codex/mobile-runtime-config-hardening-20260828` в `/home/max/GOSHA_MOBILE_WORKTREES/mobile-runtime-config-hardening-20260828`, база — `61b8d1e`.

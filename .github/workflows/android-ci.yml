@@ -1,0 +1,96 @@
+name: Android CI
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - converted_to_draft
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client-debug:
+    name: clientDebug unit build lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 34
+        run: |
+          sdkmanager --licenses < <(yes) >/dev/null
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Verify Gradle task names
+        run: |
+          mkdir -p build/reports/ci
+          ./gradlew --no-daemon tasks --all > build/reports/ci/gradle-tasks.txt
+          grep -E '(^|:)assembleClientDebug[[:space:]]' build/reports/ci/gradle-tasks.txt
+          grep -E '(^|:)testClientDebugUnitTest[[:space:]]' build/reports/ci/gradle-tasks.txt
+          grep -E '(^|:)lintClientDebug[[:space:]]' build/reports/ci/gradle-tasks.txt
+          grep -E '(^|:)verifyReleaseRuntimeConfig[[:space:]]' build/reports/ci/gradle-tasks.txt
+
+      - name: Verify release config guard rejects missing URLs
+        run: |
+          mkdir -p build/reports/ci
+          set +e
+          ./gradlew --no-daemon :app:verifyReleaseRuntimeConfig > build/reports/ci/release-config-negative.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "::error::Release config guard accepted missing URLs"
+            cat build/reports/ci/release-config-negative.log
+            exit 1
+          fi
+          grep -F "Release build requires valid http(s) URLs" build/reports/ci/release-config-negative.log
+
+      - name: Verify release config guard accepts reserved test URLs
+        env:
+          GOSHA_PANEL_BASE_URL: https://panel.example.invalid
+          RUSTORE_PRIVACY_POLICY_URL: https://panel.example.invalid/gosha/privacy
+          RUSTORE_TERMS_OF_USE_URL: https://panel.example.invalid/gosha/terms
+        run: ./gradlew --no-daemon :app:verifyReleaseRuntimeConfig
+
+      - name: Verify privacy runtime no-motion guard
+        run: bash scripts/verify_android_no_motion_config_matrix.sh
+
+      - name: Run clientDebug unit build lint
+        run: ./gradlew --no-daemon testClientDebugUnitTest assembleClientDebug lintClientDebug
+
+      - name: Record debug APK SHA-256
+        run: |
+          apk_path="app/build/outputs/apk/client/debug/app-client-debug.apk"
+          test -f "$apk_path"
+          sha256sum "$apk_path" | tee "$apk_path.sha256"
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-client-debug-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/client/debug/app-client-debug.apk
+            app/build/outputs/apk/client/debug/app-client-debug.apk.sha256
+            build/reports/ci/
